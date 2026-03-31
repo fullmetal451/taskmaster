@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TaskMaster 任務管理系統</title>
+  <title>TaskMaster 任務管理系統 (雲端同步版)</title>
   
   <!-- 載入 Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -21,8 +21,31 @@
 <body class="bg-slate-50 text-slate-800">
   <div id="root"></div>
 
-  <script type="text/babel">
+  <!-- 注意：為了使用模組化的雲端資料庫，這裡加入了 data-type="module" -->
+  <script type="text/babel" data-type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
     const { useState, useEffect, useMemo, useRef } = React;
+
+    // --- 雲端資料庫初始化 ---
+    let db = null;
+    let auth = null;
+    let appId = 'taskmaster-app';
+
+    // 系統會嘗試讀取環境變數進行雲端連線，若無則保持本地模式
+    if (typeof __firebase_config !== 'undefined') {
+      try {
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        appId = typeof __app_id !== 'undefined' ? __app_id : 'taskmaster-app';
+      } catch (error) {
+        console.error("雲端資料庫初始化失敗:", error);
+      }
+    }
 
     // --- 圖示元件替代方案 (使用 Phosphor Icons) ---
     const LayoutDashboard = ({size=24, className=''}) => <i className={`ph ph-squares-four ${className}`} style={{fontSize: size}}></i>;
@@ -105,7 +128,65 @@
       const [pwdInput, setPwdInput] = useState('');
       const [authError, setAuthError] = useState('');
 
+      // 雲端同步狀態
+      const [cloudStatus, setCloudStatus] = useState(auth ? '☁️ 連線中...' : '☁️ 僅本地儲存');
+      const [cloudUser, setCloudUser] = useState(null);
       const fileInputRef = useRef(null);
+
+      // --- 1. 雲端資料庫：建立連線與認證 ---
+      useEffect(() => {
+        if (!auth) return;
+        const initAuth = async () => {
+          try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+              await signInAnonymously(auth);
+            }
+          } catch (e) {
+            console.error("雲端認證失敗:", e);
+            setCloudStatus('⚠️ 雲端斷線');
+          }
+        };
+        initAuth();
+
+        const unsubscribe = onAuthStateChanged(auth, (u) => {
+          setCloudUser(u);
+          if (u) setCloudStatus('☁️ 雲端已連線');
+        });
+        return () => unsubscribe();
+      }, []);
+
+      // --- 2. 雲端資料庫：監聽遠端資料變化 (自動讀取) ---
+      useEffect(() => {
+        if (!cloudUser || !db) return;
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'taskmaster', 'shared');
+        const unsubscribe = onSnapshot(docRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const cloudData = snapshot.data();
+            if (cloudData.data) setData(cloudData.data);
+            if (cloudData.historyLog) setHistoryLog(cloudData.historyLog);
+            setCloudStatus('☁️ 雲端已同步');
+          }
+        }, (error) => {
+          console.error("讀取雲端資料發生錯誤:", error);
+          setCloudStatus('⚠️ 同步失敗');
+        });
+        return () => unsubscribe();
+      }, [cloudUser]);
+
+      // --- 3. 雲端資料庫：儲存資料到雲端 (自動寫入) ---
+      const saveToCloud = (newData, newLog) => {
+        if (!cloudUser || !db) return;
+        setCloudStatus('☁️ 同步中...');
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'taskmaster', 'shared');
+        setDoc(docRef, { data: newData, historyLog: newLog })
+          .then(() => setCloudStatus('☁️ 雲端已同步'))
+          .catch(e => {
+            console.error("儲存至雲端失敗:", e);
+            setCloudStatus('⚠️ 儲存失敗');
+          });
+      };
 
       const showAlert = (message) => setDialog({ isOpen: true, type: 'alert', message, onConfirm: null });
       const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, type: 'confirm', message, onConfirm });
@@ -132,11 +213,14 @@
         if (authModal.onSuccess) authModal.onSuccess(matchedUser);
       };
 
+      // 所有的資料更動都會經過這個函式，並觸發雲端儲存
       const commitData = (newData, actionDescription, user) => {
         const timestamp = new Date().toLocaleString('zh-TW');
         const newLogEntry = { id: Date.now().toString(), timestamp, description: actionDescription, snapshot: JSON.parse(JSON.stringify(data)), user: user.label };
-        setHistoryLog(prev => [newLogEntry, ...prev]);
+        const newLog = [newLogEntry, ...historyLog];
+        setHistoryLog(newLog);
         setData(newData);
+        saveToCloud(newData, newLog);
       };
 
       const rollback = (snapshot, logDescription) => {
@@ -150,8 +234,10 @@
       const setAsOrigin = (snapshot = null, description = '當前狀態') => {
         showConfirm(`確定要將「${description}」設為新的紀錄原點嗎？這將會永久刪除所有修改紀錄！`, () => {
           executeSecureAction(`設定歷史原點`, (user) => {
+            const finalData = snapshot ? snapshot : data;
             if (snapshot) setData(snapshot);
             setHistoryLog([]);
+            saveToCloud(finalData, []);
             showAlert(`已成功將「${description}」設為新原點。`);
           }, 'master');
         });
@@ -169,7 +255,7 @@
       };
 
       const handleImportClick = () => {
-        showConfirm('【警告】匯入將會覆蓋當前所有資料與密碼設定！\n強烈建議您先「匯出 JSON」備份當前狀態。\n\n確定要繼續匯入嗎？', () => {
+        showConfirm('【警告】匯入將會覆蓋當前所有資料與密碼設定！\n這項變更也會同步至雲端，強烈建議您先「匯出 JSON」備份當前狀態。\n\n確定要繼續匯入嗎？', () => {
           fileInputRef.current.click();
         });
       };
@@ -183,9 +269,11 @@
               const imported = JSON.parse(e.target.result);
               if (imported.data) {
                 setData(imported.data);
-                setHistoryLog(imported.historyLog || []);
+                const newLog = imported.historyLog || [];
+                setHistoryLog(newLog);
+                saveToCloud(imported.data, newLog); // 同步匯入的資料到雲端
                 setCurrentUser(null); 
-                showAlert('資料匯入成功！');
+                showAlert('資料匯入成功，並已全數同步！');
               }
             } catch (err) { showAlert('解析檔案失敗，檔案格式可能錯誤。'); }
           };
@@ -197,8 +285,10 @@
       const handleClearAllData = () => {
         showConfirm('【極度危險】確定要清空系統內所有的計畫、人員、任務與歷史紀錄嗎？\n此動作將無法復原！（您的密碼設定將會保留以防無法登入）', () => {
           executeSecureAction(`清空所有系統資料`, (user) => {
-            setData({ ...data, plans: [], people: [], tasks: [] });
+            const clearedData = { ...data, plans: [], people: [], tasks: [] };
+            setData(clearedData);
             setHistoryLog([]);
+            saveToCloud(clearedData, []);
             showAlert('系統資料已全數清空。');
           }, 'master');
         });
@@ -264,6 +354,12 @@
               </nav>
             </div>
             <div className="flex items-center space-x-3">
+              {/* 雲端儲存狀態提示 */}
+              <div className="flex flex-col items-end mr-3 pr-4 border-r border-slate-700">
+                <span className={`text-[10px] font-bold ${cloudStatus.includes('失敗') || cloudStatus.includes('僅本地') ? 'text-slate-400' : 'text-emerald-400'}`}>{cloudStatus}</span>
+                <span className="text-xs text-slate-500 mt-0.5 leading-none">儲存狀態</span>
+              </div>
+
               {currentUser && (
                 <div className="flex items-center gap-2 mr-2 border-r border-slate-700 pr-4">
                   <div className="flex flex-col items-end">
