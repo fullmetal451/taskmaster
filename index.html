@@ -34,18 +34,25 @@
     let auth = null;
     let appId = 'taskmaster-app';
 
-    // 系統會嘗試讀取環境變數進行雲端連線，若無則保持本地模式
-    if (typeof __firebase_config !== 'undefined') {
-      try {
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        appId = typeof __app_id !== 'undefined' ? __app_id : 'taskmaster-app';
-      } catch (error) {
-        console.error("雲端資料庫初始化失敗:", error);
-      }
-    }
+const firebaseConfig = {
+  apiKey: "AIzaSyDZF10ZVhn-O6GlC5pLo2pK7TX72kmlUsQ",
+  authDomain: "taskmaster-db-264b9.firebaseapp.com",
+  projectId: "taskmaster-db-264b9",
+  storageBucket: "taskmaster-db-264b9.firebasestorage.app",
+  messagingSenderId: "399271801562",
+  appId: "1:399271801562:web:2762926f1656f18768ebe3",
+  measurementId: "G-BF6PWRB8M8"
+};
+
+try {
+  const app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  // 這裡可以自訂一個專屬的 App ID (英文數字即可)
+  appId = 'my-taskmaster-v1'; 
+} catch (error) {
+  console.error("雲端資料庫初始化失敗:", error);
+}
 
     // --- 圖示元件替代方案 (使用 Phosphor Icons) ---
     const LayoutDashboard = ({size=24, className=''}) => <i className={`ph ph-squares-four ${className}`} style={{fontSize: size}}></i>;
