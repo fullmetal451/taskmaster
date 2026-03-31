@@ -24,7 +24,7 @@
   <!-- 注意：為了使用模組化的雲端資料庫，這裡加入了 data-type="module" -->
   <script type="text/babel" data-type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const { useState, useEffect, useMemo, useRef } = React;
@@ -34,26 +34,25 @@
     let auth = null;
     let appId = 'taskmaster-app';
 
-// 填入您自己的 Firebase 金鑰
-const firebaseConfig = {
-  apiKey: "AIzaSyDZF10ZVhn-O6GlC5pLo2pK7TX72kmlUsQ",
-  authDomain: "taskmaster-db-264b9.firebaseapp.com",
-  projectId: "taskmaster-db-264b9",
-  storageBucket: "taskmaster-db-264b9.firebasestorage.app",
-  messagingSenderId: "399271801562",
-  appId: "1:399271801562:web:2762926f1656f18768ebe3",
-  measurementId: "G-BF6PWRB8M8"
-};
+    // 填入您專屬的 Firebase 金鑰
+    const firebaseConfig = {
+      apiKey: "AIzaSyDZF10ZVhn-O6GlC5pLo2pK7TX72kmlUsQ",
+      authDomain: "taskmaster-db-264b9.firebaseapp.com",
+      projectId: "taskmaster-db-264b9",
+      storageBucket: "taskmaster-db-264b9.firebasestorage.app",
+      messagingSenderId: "399271801562",
+      appId: "1:399271801562:web:2762926f1656f18768ebe3",
+      measurementId: "G-BF6PWRB8M8"
+    };
 
-try {
-  const app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  // 這裡可以自訂一個專屬的 App ID (英文數字即可)
-  appId = 'my-taskmaster-v1'; 
-} catch (error) {
-  console.error("雲端資料庫初始化失敗:", error);
-}
+    try {
+      const app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+      appId = 'taskmaster-db-264b9'; 
+    } catch (error) {
+      console.error("雲端資料庫初始化失敗:", error);
+    }
 
     // --- 圖示元件替代方案 (使用 Phosphor Icons) ---
     const LayoutDashboard = ({size=24, className=''}) => <i className={`ph ph-squares-four ${className}`} style={{fontSize: size}}></i>;
@@ -66,6 +65,7 @@ try {
     const Undo2 = ({size=24, className=''}) => <i className={`ph ph-arrow-u-up-left ${className}`} style={{fontSize: size}}></i>;
     const Plus = ({size=24, className=''}) => <i className={`ph ph-plus ${className}`} style={{fontSize: size}}></i>;
     const Trash2 = ({size=24, className=''}) => <i className={`ph ph-trash ${className}`} style={{fontSize: size}}></i>;
+    const PencilSimple = ({size=24, className=''}) => <i className={`ph ph-pencil-simple ${className}`} style={{fontSize: size}}></i>;
     const Filter = ({size=24, className=''}) => <i className={`ph ph-funnel ${className}`} style={{fontSize: size}}></i>;
     const AlertCircle = ({size=24, className=''}) => <i className={`ph-fill ph-warning-circle ${className}`} style={{fontSize: size}}></i>;
     const CheckCircle2 = ({size=24, className=''}) => <i className={`ph-fill ph-check-circle ${className}`} style={{fontSize: size}}></i>;
@@ -134,11 +134,8 @@ try {
         if (!auth) return;
         const initAuth = async () => {
           try {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-              await signInAnonymously(auth);
-            }
+            // 因已使用自訂 Firebase 金鑰，這裡忽略環境變數注入的 Token，強制使用匿名驗證登入
+            await signInAnonymously(auth);
           } catch (e) {
             console.error("雲端認證失敗:", e);
             setCloudStatus('⚠️ 雲端斷線');
@@ -352,7 +349,7 @@ try {
             <div className="flex items-center space-x-3">
               {/* 雲端儲存狀態提示 */}
               <div className="flex flex-col items-end mr-3 pr-4 border-r border-slate-700">
-                <span className={`text-[10px] font-bold ${cloudStatus.includes('失敗') || cloudStatus.includes('僅本地') ? 'text-slate-400' : 'text-emerald-400'}`}>{cloudStatus}</span>
+                <span className={`text-[10px] font-bold ${cloudStatus.includes('失敗') || cloudStatus.includes('斷線') || cloudStatus.includes('僅本地') ? 'text-slate-400' : 'text-emerald-400'}`}>{cloudStatus}</span>
                 <span className="text-xs text-slate-500 mt-0.5 leading-none">儲存狀態</span>
               </div>
 
@@ -541,6 +538,7 @@ try {
 
     function TasksView({ data, commitData, executeSecureAction, showConfirm }) {
       const [newTask, setNewTask] = useState({ name: '', planId: '', personId: '', startDate: '', endDate: '', progress: 0, importance: 3 });
+      const [editingTask, setEditingTask] = useState(null);
       const [filters, setFilters] = useState({ planId: '', personId: '', statusId: '' }); 
       const [sortConfig, setSortConfig] = useState(null); 
 
@@ -582,6 +580,16 @@ try {
         setSortConfig({ key, direction });
       };
       const resetSort = () => setSortConfig(null);
+
+      const handleSaveEdit = (e) => {
+        e.preventDefault();
+        if (!editingTask.name || !editingTask.planId || !editingTask.personId || !editingTask.startDate || !editingTask.endDate) return;
+        executeSecureAction(`修改任務細節：${editingTask.name}`, (user) => {
+          const updatedTasks = data.tasks.map(t => t.id === editingTask.id ? { ...editingTask, progress: parseInt(editingTask.progress) } : t);
+          commitData({ ...data, tasks: updatedTasks }, `修改任務細節：${editingTask.name}`, user);
+          setEditingTask(null);
+        });
+      };
 
       const filteredTasks = data.tasks.filter(t => {
         const statusInfo = analyzeTaskStatus(t);
@@ -639,6 +647,28 @@ try {
 
       return (
         <div className="space-y-4 flex flex-col h-full">
+          {editingTask && (
+            <div className="fixed inset-0 bg-slate-900/60 z-[120] flex items-center justify-center backdrop-blur-sm">
+              <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4 border border-slate-100 animate-in zoom-in-95 duration-200">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><PencilSimple size={20} className="text-blue-500"/> 編輯任務細節</h3>
+                <form onSubmit={handleSaveEdit} className="space-y-4">
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">任務名稱</label><input type="text" value={editingTask.name} onChange={e => setEditingTask({...editingTask, name: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required /></div>
+                  <div className="flex gap-4">
+                    <div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">所屬計畫</label><select value={editingTask.planId} onChange={e => setEditingTask({...editingTask, planId: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required><option value="">選擇...</option>{data.plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+                    <div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">負責人</label><select value={editingTask.personId} onChange={e => setEditingTask({...editingTask, personId: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required><option value="">選擇...</option>{data.people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">開始日期</label><input type="date" value={editingTask.startDate} onChange={e => setEditingTask({...editingTask, startDate: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required /></div>
+                    <div className="flex-1"><label className="block text-xs font-bold text-slate-500 mb-1">結束日期</label><input type="date" value={editingTask.endDate} onChange={e => setEditingTask({...editingTask, endDate: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required /></div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+                    <button type="button" onClick={() => setEditingTask(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-bold transition-colors">取消</button>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-sm">儲存修改</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
           <div className="flex justify-between items-end">
             <h2 className="text-2xl font-bold text-slate-800">任務與排程管理</h2>
             <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">
@@ -706,7 +736,7 @@ try {
                   <div className="w-16 p-1.5 border-r border-slate-200 flex items-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('person')}>負責人 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'person' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span></div>
                   <div className="w-16 p-1.5 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('importance')}>重要性 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'importance' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span></div>
                   <div className="w-12 p-1.5 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('progress')}>進度 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'progress' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span></div>
-                  <div className="w-8 p-1.5 border-r border-slate-200 flex items-center justify-center">操作</div>
+                  <div className="w-12 p-1.5 border-r border-slate-200 flex items-center justify-center">操作</div>
                 </div>
                 <div className="flex bg-slate-50">
                   {timeline.days.map((day, i) => {
@@ -747,7 +777,10 @@ try {
                           <input type="number" min="0" max="100" value={task.progress} onChange={(e) => handleUpdateProgress(task.id, e.target.value)} className={`w-6 text-right bg-transparent border-b border-transparent group-hover/progress:border-slate-300 focus:border-blue-500 outline-none font-bold ${statusInfo.textColor} cursor-pointer relative z-10 appearance-none`} title="點擊修改進度" />
                           <span className={`font-bold ${statusInfo.textColor} relative z-10`}>%</span>
                         </div>
-                        <div className="w-8 p-1.5 border-r border-slate-100 flex items-center justify-center"><button onClick={() => handleDelete(task.id, task.name)} className="text-slate-400 hover:text-red-500 transition-colors" title="刪除任務"><Trash2 size={12} /></button></div>
+                        <div className="w-12 p-1.5 border-r border-slate-100 flex items-center justify-center gap-2">
+                          <button onClick={() => setEditingTask(task)} className="text-slate-400 hover:text-blue-500 transition-colors" title="編輯任務"><PencilSimple size={14} /></button>
+                          <button onClick={() => handleDelete(task.id, task.name)} className="text-slate-400 hover:text-red-500 transition-colors" title="刪除任務"><Trash2 size={14} /></button>
+                        </div>
                       </div>
                       
                       <div className="flex bg-transparent">
