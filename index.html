@@ -34,6 +34,7 @@
     let auth = null;
     let appId = 'taskmaster-app';
 
+// 填入您自己的 Firebase 金鑰
 const firebaseConfig = {
   apiKey: "AIzaSyDZF10ZVhn-O6GlC5pLo2pK7TX72kmlUsQ",
   authDomain: "taskmaster-db-264b9.firebaseapp.com",
@@ -87,26 +88,14 @@ try {
       return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     };
 
-    // --- 初始模擬資料 ---
+    // --- 初始模擬資料 (已清空) ---
     const initialData = {
       passwords: [
         { id: 'pwd_master', pwd: 'MasterPassword01!', role: 'master', label: '預設管理員' }
       ],
-      plans: [
-        { id: 'p1', name: '官網改版專案', color: '#3b82f6' }, 
-        { id: 'p2', name: 'Q3 行銷活動', color: '#10b981' }  
-      ],
-      people: [
-        { id: 'u1', name: 'Alice (設計)' },
-        { id: 'u2', name: 'Bob (工程)' },
-        { id: 'u3', name: 'Charlie (行銷)' }
-      ],
-      tasks: [
-        { id: 't1', planId: 'p1', personId: 'u1', name: '首頁 UI 設計', startDate: '2026-03-20', endDate: '2026-03-25', progress: 100, importance: 5 }, 
-        { id: 't2', planId: 'p1', personId: 'u2', name: '前端切版與串接', startDate: '2026-03-22', endDate: '2026-03-29', progress: 50, importance: 4 },  
-        { id: 't3', planId: 'p2', personId: 'u3', name: '社群素材規劃', startDate: '2026-03-28', endDate: '2026-04-05', progress: 30, importance: 3 },  
-        { id: 't4', planId: 'p2', personId: 'u1', name: '廣告圖設計', startDate: '2026-04-02', endDate: '2026-04-10', progress: 0, importance: 3 }    
-      ]
+      plans: [],
+      people: [],
+      tasks: []
     };
 
     // --- 核心共用邏輯：判定任務狀態與顏色 ---
