@@ -91,10 +91,10 @@
     // 計畫類型標籤選項
     const TAG_OPTIONS = ['演唱會', '見面會', '演奏會', '展覽', '講座', '主辦', '協辦'];
 
-    // --- 初始模擬資料 (全數清空，僅保留管理員密碼) ---
+    // --- 初始模擬資料 ---
     const initialData = {
       passwords: [
-        { id: 'pwd_master', pwd: 'MasterPassword01!', role: 'master', label: '預設管理員' }
+        { id: 'pwd_master', pwd: 'Resonance01!', role: 'master', label: '預設管理員' }
       ],
       plans: [],
       people: [],
@@ -131,7 +131,7 @@
       const [cloudUser, setCloudUser] = useState(null);
       const fileInputRef = useRef(null);
 
-      // --- 1. 雲端資料庫：建立連線與認證 (使用匿名登入確保 GitHub Pages 皆可運作) ---
+      // --- 1. 雲端資料庫：建立連線與認證 ---
       useEffect(() => {
         if (!auth) return;
         const initAuth = async () => {
@@ -310,18 +310,27 @@
       return (
         <div className="flex flex-col h-screen bg-slate-50 text-slate-800 text-sm font-sans">
           
+          {/* 密碼驗證對話框 */}
           {authModal.isOpen && (
-            <div className="fixed inset-0 bg-slate-900/60 z-[110] flex items-center justify-center backdrop-blur-sm">
+            <div className="fixed inset-0 bg-slate-900/60 z-[150] flex items-center justify-center backdrop-blur-sm">
               <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full mx-4 border border-slate-100 animate-in zoom-in-95 duration-200">
                 <div className="flex items-center gap-3 text-blue-600 mb-2">
                   <ShieldCheck size={28} />
                   <h3 className="text-xl font-bold">身分驗證</h3>
                 </div>
                 <p className="text-slate-600 mb-6 text-sm">{authModal.message}</p>
+                
                 <form onSubmit={handleAuthSubmit}>
                   <div className="mb-4">
                     <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">請輸入授權密碼</label>
-                    <input type="password" value={pwdInput} onChange={e => setPwdInput(e.target.value)} className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-base tracking-widest font-mono" placeholder="••••••••••••••••" autoFocus />
+                    <input 
+                      type="password" 
+                      value={pwdInput} 
+                      onChange={e => setPwdInput(e.target.value)} 
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-base tracking-widest font-mono"
+                      placeholder="••••••••••••••••"
+                      autoFocus
+                    />
                     {authError && <div className="text-red-500 text-xs mt-2 font-medium flex items-center gap-1"><AlertCircle size={14}/> {authError}</div>}
                   </div>
                   <div className="flex justify-end gap-3 mt-6">
@@ -330,30 +339,45 @@
                   </div>
                 </form>
                 <div className="mt-6 pt-4 border-t border-slate-100 text-[10px] text-slate-400 text-center">
-                  (預設管理員密碼：<span className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-500">MasterPassword01!</span>)
+                  (預設管理員密碼：<span className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-500">本公司英文名（一個單字首字大寫）+01!</span>)
                 </div>
               </div>
             </div>
           )}
 
+          {/* 系統提示對話框 */}
           {dialog.isOpen && (
-            <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
+            <div className="fixed inset-0 bg-black/50 z-[160] flex items-center justify-center">
               <div className="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full mx-4">
                 <p className="text-slate-800 mb-6 text-base whitespace-pre-wrap">{dialog.message}</p>
                 <div className="flex justify-end gap-3">
                   {dialog.type === 'confirm' && (
                     <button onClick={closeDialog} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium">取消</button>
                   )}
-                  <button onClick={() => { if (dialog.onConfirm) dialog.onConfirm(); closeDialog(); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">確定</button>
+                  <button 
+                    onClick={() => {
+                      if (dialog.onConfirm) dialog.onConfirm();
+                      closeDialog();
+                    }} 
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    確定
+                  </button>
                 </div>
               </div>
             </div>
           )}
 
+          {/* 頂部導覽列 */}
           <header className="bg-slate-900 text-slate-300 flex items-center justify-between px-6 py-3 shadow-md z-20 shrink-0">
             <div className="flex items-center gap-8">
-              <div>
-                <h1 className="text-xl font-bold text-white flex items-center gap-2">
+              <div 
+                className="flex flex-col cursor-pointer hover:opacity-80 transition-opacity" 
+                onClick={() => setActiveTab('dashboard')}
+                title="回到儀表板"
+              >
+                <span className="text-[10px] text-blue-400 font-bold tracking-widest mb-0.5">鳴音合創有限公司</span>
+                <h1 className="text-xl font-bold text-white flex items-center gap-2 leading-none">
                   <CheckSquare className="text-blue-400" size={24} />
                   TaskMaster
                 </h1>
@@ -364,7 +388,14 @@
                 <NavItem icon={<Users />} label="人員" active={activeTab === 'people'} onClick={() => setActiveTab('people')} />
                 <NavItem icon={<CheckSquare />} label="任務" active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
                 <NavItem icon={<History />} label="歷史回溯" active={activeTab === 'history'} onClick={() => setActiveTab('history')} />
-                <NavItem icon={<KeyRound />} label="密碼管理" active={activeTab === 'passwords'} onClick={() => executeSecureAction('進入密碼管理中心需要驗證管理員權限', () => setActiveTab('passwords'), 'master')} />
+                <NavItem 
+                  icon={<KeyRound />} 
+                  label="密碼管理" 
+                  active={activeTab === 'passwords'} 
+                  onClick={() => {
+                    executeSecureAction('進入密碼管理中心需要驗證管理員權限', () => setActiveTab('passwords'), 'master');
+                  }} 
+                />
               </nav>
             </div>
             <div className="flex items-center space-x-3">
@@ -379,11 +410,18 @@
                     <span className="text-[10px] text-slate-400 font-bold uppercase">{currentUser.role === 'master' ? '管理員 (Master)' : '一般使用者'}</span>
                     <span className="text-xs text-blue-300 font-medium">{currentUser.label}</span>
                   </div>
-                  <button onClick={() => setCurrentUser(null)} className="p-1.5 bg-slate-800 hover:bg-red-500 hover:text-white rounded-md transition-colors text-slate-400" title="登出並鎖定"><LogOut size={16} /></button>
+                  <button onClick={() => setCurrentUser(null)} className="p-1.5 bg-slate-800 hover:bg-red-500 hover:text-white rounded-md transition-colors text-slate-400" title="登出並鎖定">
+                    <LogOut size={16} />
+                  </button>
                 </div>
               )}
-              <button onClick={exportData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-slate-800 hover:bg-slate-700 transition-colors text-white"><Download size={14} /> 匯出 JSON</button>
-              <button onClick={handleImportClick} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-slate-800 hover:bg-slate-700 transition-colors text-white"><Upload size={14} /> 匯入</button>
+
+              <button onClick={exportData} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-slate-800 hover:bg-slate-700 transition-colors text-white">
+                <Download size={14} /> 匯出 JSON
+              </button>
+              <button onClick={handleImportClick} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-slate-800 hover:bg-slate-700 transition-colors text-white">
+                <Upload size={14} /> 匯入
+              </button>
               <input type="file" ref={fileInputRef} accept=".json" className="hidden" onChange={importData} />
             </div>
           </header>
@@ -402,36 +440,54 @@
 
     function NavItem({ icon, label, active, onClick }) {
       return (
-        <button onClick={onClick} className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${active ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'}`}>
+        <button
+          onClick={onClick}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+            active ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'
+          }`}
+        >
           {React.cloneElement(icon, { size: 16 })}
           <span className="font-medium text-sm whitespace-nowrap">{label}</span>
         </button>
       );
     }
 
-    // --- 子組件 ---
+    // ==========================================
+    // 子組件區塊
+    // ==========================================
+
+    // 1. 儀表板
     function DashboardView({ data }) {
       const tasksWithStatus = data.tasks.map(t => ({ ...t, state: analyzeTaskStatus(t) }));
+      
       const completed = tasksWithStatus.filter(t => t.state.id === 'completed').length;
       const delayed = tasksWithStatus.filter(t => t.state.id === 'delayed').length;
       const inProgress = tasksWithStatus.filter(t => t.state.id === 'in_progress').length;
       const notStarted = tasksWithStatus.filter(t => t.state.id === 'not_started').length;
       const total = data.tasks.length;
+
       const avgProgress = total > 0 ? Math.round(data.tasks.reduce((acc, t) => acc + parseInt(t.progress || 0), 0) / total) : 0;
 
       return (
         <div className="space-y-6 animate-in fade-in duration-300">
           <h2 className="text-2xl font-bold text-slate-800">專案數據儀表板 (KPI Dashboard)</h2>
+          
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <StatCard title="總任務數" value={total} icon={<CheckSquare size={20} className="text-slate-500" />} />
             <StatCard title="平均總進度" value={`${avgProgress}%`} icon={<Activity size={20} className="text-amber-500" />} />
             <StatCard title="已完成" value={completed} icon={<CheckCircle2 size={20} className="text-emerald-500" />} />
             <StatCard title="進行中" value={inProgress} icon={<Clock size={20} className="text-blue-500" />} />
             <div className={`p-4 rounded-xl shadow-sm border flex items-center gap-3 ${delayed > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100'}`}>
-              <div className={`p-3 rounded-lg ${delayed > 0 ? 'bg-red-100 text-red-600' : 'bg-slate-50 text-slate-400'}`}><AlertCircle size={20} /></div>
-              <div><div className={`text-xs font-medium ${delayed > 0 ? 'text-red-600' : 'text-slate-500'}`}>落後延遲任務</div><div className={`text-xl font-bold ${delayed > 0 ? 'text-red-700' : 'text-slate-800'}`}>{delayed}</div></div>
+              <div className={`p-3 rounded-lg ${delayed > 0 ? 'bg-red-100 text-red-600' : 'bg-slate-50 text-slate-400'}`}>
+                <AlertCircle size={20} />
+              </div>
+              <div>
+                <div className={`text-xs font-medium ${delayed > 0 ? 'text-red-600' : 'text-slate-500'}`}>落後延遲任務</div>
+                <div className={`text-xl font-bold ${delayed > 0 ? 'text-red-700' : 'text-slate-800'}`}>{delayed}</div>
+              </div>
             </div>
           </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 lg:col-span-1 flex flex-col">
               <h3 className="text-base font-bold mb-4">狀態分佈</h3>
@@ -442,28 +498,36 @@
                 <ProgressBar label="已延遲" count={delayed} total={total} color="bg-red-500" />
               </div>
             </div>
+
             <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 lg:col-span-2">
               <h3 className="text-base font-bold mb-3">需關注任務 (延遲或即將到期)</h3>
               <div className="space-y-2">
                 {tasksWithStatus.filter(t => t.state.id === 'delayed' || t.state.id === 'in_progress').slice(0, 5).map(task => {
                   const plan = data.plans.find(p => p.id === task.planId) || {};
                   return (
-                    <div key={task.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs ${task.state.badgeClass}`}>{task.state.icon} {task.state.label}</span>
-                        <div>
-                          <div className="font-medium text-sm flex items-center gap-1">
-                            {plan.tags?.length > 0 && <span className="text-indigo-600 font-bold text-[10px]">{plan.tags.map(t => `[${t}]`).join('')}</span>}
-                            {task.name}
-                          </div>
-                          <div className="text-[10px] text-slate-500">{task.startDate} ~ {task.endDate}</div>
+                  <div key={task.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs ${task.state.badgeClass}`}>
+                        {task.state.icon} {task.state.label}
+                      </span>
+                      <div>
+                        <div className="font-medium text-sm flex items-center gap-1">
+                          {plan.tags?.length > 0 && (
+                            <span className="text-indigo-600 font-bold text-[10px]">
+                              {plan.tags.map(t => `[${t}]`).join('')}
+                            </span>
+                          )}
+                          {task.name}
                         </div>
+                        <div className="text-[10px] text-slate-500">{task.startDate} ~ {task.endDate}</div>
                       </div>
-                      <div className={`text-sm font-bold ${task.state.textColor}`}>{task.progress}%</div>
                     </div>
-                  )
-                })}
-                {tasksWithStatus.filter(t => t.state.id === 'delayed' || t.state.id === 'in_progress').length === 0 && <div className="text-center text-slate-400 py-6 text-sm">目前無待辦或延遲的任務</div>}
+                    <div className={`text-sm font-bold ${task.state.textColor}`}>{task.progress}%</div>
+                  </div>
+                )})}
+                {tasksWithStatus.filter(t => t.state.id === 'delayed' || t.state.id === 'in_progress').length === 0 && (
+                  <div className="text-center text-slate-400 py-6 text-sm">目前無待辦或延遲的任務</div>
+                )}
               </div>
             </div>
           </div>
@@ -475,7 +539,10 @@
       return (
         <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center gap-3">
           <div className="p-3 bg-slate-50 rounded-lg">{icon}</div>
-          <div><div className="text-xs text-slate-500 font-medium">{title}</div><div className="text-xl font-bold text-slate-800">{value}</div></div>
+          <div>
+            <div className="text-xs text-slate-500 font-medium">{title}</div>
+            <div className="text-xl font-bold text-slate-800">{value}</div>
+          </div>
         </div>
       );
     }
@@ -484,12 +551,18 @@
       const percent = total > 0 ? Math.round((count / total) * 100) : 0;
       return (
         <div>
-          <div className="flex justify-between text-xs mb-1"><span className="font-medium text-slate-600">{label} ({count})</span><span className="text-slate-400">{percent}%</span></div>
-          <div className="w-full bg-slate-100 rounded-full h-2"><div className={`${color} h-2 rounded-full`} style={{ width: `${percent}%` }}></div></div>
+          <div className="flex justify-between text-xs mb-1">
+            <span className="font-medium text-slate-600">{label} ({count})</span>
+            <span className="text-slate-400">{percent}%</span>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-2">
+            <div className={`${color} h-2 rounded-full`} style={{ width: `${percent}%` }}></div>
+          </div>
         </div>
       );
     }
 
+    // 2. 計畫管理 (加上計畫編輯功能)
     function PlansView({ data, commitData, executeSecureAction, showConfirm }) {
       const [newPlan, setNewPlan] = useState({ name: '', color: '#3b82f6', tags: [] });
       const [editingPlan, setEditingPlan] = useState(null);
@@ -523,16 +596,22 @@
 
       const toggleTag = (planObj, setPlanObj, tag) => {
         const currentTags = planObj.tags || [];
-        const newTags = currentTags.includes(tag) ? currentTags.filter(t => t !== tag) : [...currentTags, tag];
+        const newTags = currentTags.includes(tag) 
+          ? currentTags.filter(t => t !== tag) 
+          : [...currentTags, tag];
         setPlanObj({ ...planObj, tags: newTags });
       };
 
       return (
         <div className="space-y-4 animate-in fade-in duration-300">
+          
+          {/* 編輯計畫對話框 */}
           {editingPlan && (
             <div className="fixed inset-0 bg-slate-900/60 z-[120] flex items-center justify-center backdrop-blur-sm">
               <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4 border border-slate-100 animate-in zoom-in-95 duration-200">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Pencil size={20} className="text-blue-500"/> 修改計畫資料</h3>
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <Pencil size={20} className="text-blue-500"/> 修改計畫資料
+                </h3>
                 <form onSubmit={handleSavePlanEdit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">計畫名稱</label>
@@ -542,7 +621,14 @@
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><Tag size={12}/> 標籤 (計畫類型)</label>
                     <div className="flex flex-wrap gap-1.5">
                       {TAG_OPTIONS.map(tag => (
-                        <button key={tag} type="button" onClick={() => toggleTag(editingPlan, setEditingPlan, tag)} className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${editingPlan.tags?.includes(tag) ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}>{tag}</button>
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleTag(editingPlan, setEditingPlan, tag)}
+                          className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${editingPlan.tags?.includes(tag) ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                        >
+                          {tag}
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -570,13 +656,22 @@
                 <label className="block text-xs font-medium text-slate-700 mb-1">識別色</label>
                 <input type="color" value={newPlan.color} onChange={e => setNewPlan({...newPlan, color: e.target.value})} className="h-8 w-14 p-0.5 border border-slate-300 rounded-md cursor-pointer" />
               </div>
-              <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors"><Plus size={16} /> 新增</button>
+              <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors">
+                <Plus size={16} /> 新增
+              </button>
             </div>
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><Tag size={12}/> 標籤 (計畫類型)</label>
               <div className="flex flex-wrap gap-1.5">
                 {TAG_OPTIONS.map(tag => (
-                  <button key={tag} type="button" onClick={() => toggleTag(newPlan, setNewPlan, tag)} className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${newPlan.tags?.includes(tag) ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}>{tag}</button>
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleTag(newPlan, setNewPlan, tag)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${newPlan.tags?.includes(tag) ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                  >
+                    {tag}
+                  </button>
                 ))}
               </div>
             </div>
@@ -607,6 +702,7 @@
       );
     }
 
+    // 3. 人員管理
     function PeopleView({ data, commitData, executeSecureAction, showConfirm }) {
       const [newName, setNewName] = useState('');
       const handleAdd = (e) => {
@@ -633,7 +729,9 @@
               <label className="block text-xs font-medium text-slate-700 mb-1">人員名稱與職稱</label>
               <input type="text" value={newName} onChange={e => setNewName(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none" required />
             </div>
-            <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors"><Plus size={16} /> 新增</button>
+            <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors">
+              <Plus size={16} /> 新增
+            </button>
           </form>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {data.people.map(person => (
@@ -647,15 +745,18 @@
       );
     }
 
+    // 4. 任務管理
     function TasksView({ data, commitData, executeSecureAction, showConfirm }) {
       const [newTask, setNewTask] = useState({ name: '', planId: '', personId: '', startDate: '', endDate: '', progress: 0, importance: 3 });
       const [editingTask, setEditingTask] = useState(null);
+      
       const [filters, setFilters] = useState({ planId: '', personId: '', statusId: '' }); 
       const [sortConfig, setSortConfig] = useState(null); 
 
       const handleAdd = (e) => {
         e.preventDefault();
         if (!newTask.name || !newTask.planId || !newTask.personId || !newTask.startDate || !newTask.endDate) return;
+        
         executeSecureAction(`新增任務：${newTask.name}`, (user) => {
           const task = { id: `t${Date.now()}`, ...newTask, progress: parseInt(newTask.progress) };
           commitData({ ...data, tasks: [...data.tasks, task] }, `新增任務：${task.name}`, user);
@@ -725,6 +826,7 @@
             } else if (sortConfig.key === 'progress') {
               aValue = a.progress || 0; bValue = b.progress || 0;
             }
+
             if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
             if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
@@ -758,15 +860,20 @@
 
       return (
         <div className="space-y-4 animate-in fade-in duration-300 flex flex-col h-full relative">
+          
+          {/* 編輯任務細節對話框 */}
           {editingTask && (
             <div className="fixed inset-0 bg-slate-900/60 z-[120] flex items-center justify-center backdrop-blur-sm">
               <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4 border border-slate-100 animate-in zoom-in-95 duration-200">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Pencil size={20} className="text-blue-500"/> 編輯任務細節</h3>
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <Pencil size={20} className="text-blue-500"/> 編輯任務細節
+                </h3>
                 <form onSubmit={handleSaveTaskEdit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">任務名稱</label>
                     <input type="text" value={editingTask.name} onChange={e => setEditingTask({...editingTask, name: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required />
                   </div>
+
                   <div className="flex gap-4">
                     <div className="flex-1">
                       <label className="block text-xs font-bold text-slate-500 mb-1">所屬計畫</label>
@@ -804,6 +911,7 @@
 
           <div className="flex justify-between items-end">
             <h2 className="text-2xl font-bold text-slate-800">任務與排程管理</h2>
+            
             <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">
               <Filter size={14} className="text-slate-400 ml-1" />
               <span className="text-slate-500 font-medium mr-1">篩選:</span>
@@ -831,6 +939,7 @@
             </div>
           </div>
           
+          {/* 新增任務表單 */}
           <form onSubmit={handleAdd} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-3 shrink-0">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
@@ -866,25 +975,41 @@
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">重要性 (星級)</label>
                 <div className="flex items-center gap-1.5 h-8">
                   {[1, 2, 3, 4, 5].map(star => (
-                    <Star key={star} size={20} className={`cursor-pointer transition-colors ${newTask.importance >= star ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} onClick={() => setNewTask({...newTask, importance: star})} />
+                    <Star 
+                      key={star} 
+                      size={20} 
+                      className={`cursor-pointer transition-colors ${newTask.importance >= star ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`}
+                      onClick={() => setNewTask({...newTask, importance: star})}
+                    />
                   ))}
                 </div>
               </div>
               <div className="flex-1 flex justify-end">
-                <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-1.5 rounded-md font-medium flex items-center justify-center gap-1.5 h-8 text-sm transition-colors"><Plus size={16} /> 新增任務</button>
+                <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-8 py-1.5 rounded-md font-medium flex items-center justify-center gap-1.5 h-8 text-sm transition-colors">
+                  <Plus size={16} /> 新增任務
+                </button>
               </div>
             </div>
           </form>
 
+          {/* 任務列表與每日網格時間軸 */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto overflow-y-auto flex-1 relative">
             <div className="w-max min-w-full flex flex-col">
               <div className="flex border-b border-slate-200 bg-slate-100 text-[9px] text-slate-600 font-bold sticky top-0 z-30 shadow-sm">
                 <div className="sticky left-0 bg-slate-100 z-40 flex shadow-[2px_0_5px_rgba(0,0,0,0.06)] shrink-0 h-8">
                   <div className="w-48 p-1.5 border-r border-slate-200 flex items-center">任務名稱</div>
-                  <div className="w-16 p-1.5 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('status')}>狀態 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span></div>
-                  <div className="w-16 p-1.5 border-r border-slate-200 flex items-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('person')}>負責人 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'person' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span></div>
-                  <div className="w-16 p-1.5 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('importance')}>重要性 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'importance' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span></div>
-                  <div className="w-12 p-1.5 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('progress')}>進度 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'progress' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span></div>
+                  <div className="w-16 p-1.5 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('status')}>
+                    狀態 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
+                  </div>
+                  <div className="w-16 p-1.5 border-r border-slate-200 flex items-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('person')}>
+                    負責人 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'person' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
+                  </div>
+                  <div className="w-16 p-1.5 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('importance')}>
+                    重要性 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'importance' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
+                  </div>
+                  <div className="w-12 p-1.5 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('progress')}>
+                    進度 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'progress' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
+                  </div>
                   <div className="w-12 p-1.5 border-r border-slate-200 flex items-center justify-center">操作</div>
                 </div>
                 <div className="flex bg-slate-50">
@@ -914,7 +1039,11 @@
                       <div className="sticky left-0 bg-white group-hover:bg-slate-50 z-20 flex shadow-[2px_0_5px_rgba(0,0,0,0.04)] shrink-0 transition-colors text-[9px]">
                         <div className="w-48 p-1.5 border-r border-slate-100 flex flex-col justify-center truncate relative">
                           <div className="font-medium text-[11px] truncate" title={task.name}>
-                            {plan.tags && plan.tags.length > 0 && <span className="text-indigo-600 font-bold mr-1">{plan.tags.map(t => `[${t}]`).join('')}</span>}
+                            {plan.tags && plan.tags.length > 0 && (
+                              <span className="text-indigo-600 font-bold mr-1">
+                                {plan.tags.map(t => `[${t}]`).join('')}
+                              </span>
+                            )}
                             {task.name}
                           </div>
                           <div className="text-[9px] text-slate-400 truncate mt-0.5 flex items-center gap-1">
@@ -922,19 +1051,48 @@
                             <span className="truncate">{plan.name || '已刪除計畫'}</span>
                           </div>
                         </div>
-                        <div className="w-16 p-1.5 border-r border-slate-100 flex items-center justify-center"><span className={`flex items-center justify-center px-1 py-0.5 rounded text-[8px] w-full shadow-sm truncate ${statusInfo.badgeClass}`} title={statusInfo.label}><span className="truncate">{statusInfo.label}</span></span></div>
-                        <div className="w-16 p-1.5 border-r border-slate-100 flex items-center text-[9px] truncate" title={person.name}>{person.name || '未知'}</div>
-                        <div className="w-16 p-1.5 border-r border-slate-100 flex items-center justify-center gap-0.5">
-                          {[1, 2, 3, 4, 5].map(star => <Star key={star} size={9} className={`cursor-pointer ${importance >= star ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} onClick={() => handleUpdateImportance(task.id, star)} title={`設為 ${star} 星`} />)}
+                        <div className="w-16 p-1.5 border-r border-slate-100 flex items-center justify-center">
+                          <span className={`flex items-center justify-center px-1 py-0.5 rounded text-[8px] w-full shadow-sm truncate ${statusInfo.badgeClass}`} title={statusInfo.label}>
+                            <span className="truncate">{statusInfo.label}</span>
+                          </span>
                         </div>
+                        <div className="w-16 p-1.5 border-r border-slate-100 flex items-center text-[9px] truncate" title={person.name}>{person.name || '未知'}</div>
+                        
+                        <div className="w-16 p-1.5 border-r border-slate-100 flex items-center justify-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map(star => (
+                            <Star 
+                              key={star} 
+                              size={9} 
+                              className={`cursor-pointer ${importance >= star ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`}
+                              onClick={() => handleUpdateImportance(task.id, star)}
+                              title={`設為 ${star} 星`}
+                            />
+                          ))}
+                        </div>
+
                         <div className="w-12 p-1.5 border-r border-slate-100 flex items-center justify-center gap-0.5 relative overflow-hidden group/progress">
-                          <div className="absolute left-0 top-0 bottom-0 opacity-20 transition-all duration-300 pointer-events-none" style={{ width: `${task.progress}%`, backgroundColor: finalBarColor }} />
-                          <input type="number" min="0" max="100" value={task.progress} onChange={(e) => handleUpdateProgress(task.id, e.target.value)} className={`w-6 text-right bg-transparent border-b border-transparent group-hover/progress:border-slate-300 focus:border-blue-500 outline-none font-bold ${statusInfo.textColor} cursor-pointer relative z-10 appearance-none`} title="點擊修改進度" />
+                          <div 
+                            className="absolute left-0 top-0 bottom-0 opacity-20 transition-all duration-300 pointer-events-none"
+                            style={{ width: `${task.progress}%`, backgroundColor: finalBarColor }}
+                          />
+                          <input 
+                            type="number" 
+                            min="0" max="100" 
+                            value={task.progress} 
+                            onChange={(e) => handleUpdateProgress(task.id, e.target.value)} 
+                            className={`w-6 text-right bg-transparent border-b border-transparent group-hover/progress:border-slate-300 focus:border-blue-500 outline-none font-bold ${statusInfo.textColor} cursor-pointer relative z-10 appearance-none`} 
+                            title="點擊修改進度"
+                          />
                           <span className={`font-bold ${statusInfo.textColor} relative z-10`}>%</span>
                         </div>
+                        
                         <div className="w-12 p-1.5 border-r border-slate-100 flex items-center justify-center gap-2">
-                          <button onClick={() => setEditingTask(task)} className="text-slate-400 hover:text-blue-500 transition-colors" title="編輯任務"><Pencil size={14} /></button>
-                          <button onClick={() => handleDelete(task.id, task.name)} className="text-slate-400 hover:text-red-500 transition-colors" title="刪除任務"><Trash2 size={14} /></button>
+                          <button onClick={() => setEditingTask(task)} className="text-slate-400 hover:text-blue-500 transition-colors" title="編輯任務">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => handleDelete(task.id, task.name)} className="text-slate-400 hover:text-red-500 transition-colors" title="刪除任務">
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
                       
@@ -948,7 +1106,13 @@
 
                           return (
                             <div key={i} className={`w-8 border-r border-slate-100 shrink-0 flex items-center justify-center ${isToday ? 'bg-amber-50/50' : ''} ${isStart ? 'pl-0.5' : ''} ${isEnd ? 'pr-0.5' : ''}`}>
-                              {isWithin && <div className={`h-4 w-full ${isStart ? 'rounded-l-sm' : ''} ${isEnd ? 'rounded-r-sm' : ''} shadow-sm opacity-90`} style={{ backgroundColor: finalBarColor }} title={`${task.name} (${task.startDate} ~ ${task.endDate})`} />}
+                              {isWithin && (
+                                <div 
+                                  className={`h-4 w-full ${isStart ? 'rounded-l-sm' : ''} ${isEnd ? 'rounded-r-sm' : ''} shadow-sm opacity-90`} 
+                                  style={{ backgroundColor: finalBarColor }}
+                                  title={`${task.name} (${task.startDate} ~ ${task.endDate})`}
+                                />
+                              )}
                             </div>
                           );
                         })}
@@ -956,7 +1120,9 @@
                     </div>
                   );
                 })}
-                {sortedTasks.length === 0 && <div className="p-8 text-center text-slate-400 text-sm">找不到符合條件的任務</div>}
+                {sortedTasks.length === 0 && (
+                  <div className="p-8 text-center text-slate-400 text-sm">找不到符合條件的任務</div>
+                )}
               </div>
             </div>
           </div>
@@ -964,6 +1130,7 @@
       );
     }
 
+    // 5. 歷史紀錄與回溯
     function HistoryView({ historyLog, rollback, setAsOrigin, currentUser }) {
       if (historyLog.length === 0) return (
         <div className="space-y-4 animate-in fade-in duration-300">
@@ -975,8 +1142,13 @@
       return (
         <div className="space-y-4 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
-            <div><h2 className="text-2xl font-bold text-slate-800">修改紀錄與回溯</h2><p className="text-slate-500 text-sm mt-1">這裡紀錄了你所有的操作，可以選擇回溯，或將某個狀態設為新的起點。</p></div>
-            <button onClick={() => setAsOrigin(null, '當前系統狀態')} className="flex items-center justify-center gap-1.5 text-xs px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors font-bold border border-red-200 shrink-0 shadow-sm"><Save size={16} /> 將當前狀態設為原點</button>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800">修改紀錄與回溯</h2>
+              <p className="text-slate-500 text-sm mt-1">這裡紀錄了你所有的操作，可以選擇回溯，或將某個狀態設為新的起點。</p>
+            </div>
+            <button onClick={() => setAsOrigin(null, '當前系統狀態')} className="flex items-center justify-center gap-1.5 text-xs px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors font-bold border border-red-200 shrink-0 shadow-sm">
+              <Save size={16} /> 將當前狀態設為原點
+            </button>
           </div>
 
           <div className="relative border-l-2 border-slate-200 ml-3 space-y-6 py-4">
@@ -987,13 +1159,21 @@
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <div className="text-xs text-slate-500">{log.timestamp}</div>
-                      {currentUser?.role === 'master' && log.user && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold whitespace-nowrap">操作者: {log.user}</span>}
+                      {currentUser?.role === 'master' && log.user && (
+                        <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold whitespace-nowrap">
+                          操作者: {log.user}
+                        </span>
+                      )}
                     </div>
                     <div className="font-medium text-slate-800 text-base">{log.description}</div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => setAsOrigin(log.snapshot, log.description)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-md transition-colors font-bold" title="以此狀態作為新的起點並清除其他紀錄"><Save size={14} /> 儲存為原點</button>
-                    <button onClick={() => rollback(log.snapshot, log.description)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-100 hover:bg-amber-100 hover:text-amber-700 text-slate-600 rounded-md transition-colors font-bold"><Undo2 size={14} /> 回溯至此狀態</button>
+                    <button onClick={() => setAsOrigin(log.snapshot, log.description)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-md transition-colors font-bold" title="以此狀態作為新的起點並清除其他紀錄">
+                      <Save size={14} /> 儲存為原點
+                    </button>
+                    <button onClick={() => rollback(log.snapshot, log.description)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-100 hover:bg-amber-100 hover:text-amber-700 text-slate-600 rounded-md transition-colors font-bold">
+                      <Undo2 size={14} /> 回溯至此狀態
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1003,6 +1183,7 @@
       );
     }
 
+    // 6. 新增：權限與密碼管理中心
     function PasswordsView({ data, commitData, executeSecureAction, showConfirm, onClearAll }) {
       const [newPwd, setNewPwd] = useState({ label: '', role: 'user', pwd: '' });
       const [showPwds, setShowPwds] = useState(false);
@@ -1011,8 +1192,16 @@
       const handleAdd = (e) => {
         e.preventDefault();
         setErrorMsg('');
-        if (newPwd.pwd.length < 16 || newPwd.pwd.length > 32) return setErrorMsg('密碼長度必須介於 16 到 32 個字元之間');
-        if (data.passwords.some(p => p.pwd === newPwd.pwd)) return setErrorMsg('密碼與現有密碼重複，請更改');
+        
+        if (newPwd.pwd.length < 16 || newPwd.pwd.length > 32) {
+          setErrorMsg('密碼長度必須介於 16 到 32 個字元之間');
+          return;
+        }
+
+        if (data.passwords.some(p => p.pwd === newPwd.pwd)) {
+          setErrorMsg('密碼與現有密碼重複，請更改');
+          return;
+        }
 
         executeSecureAction(`新增授權密碼：${newPwd.label}`, (user) => {
           const pwdEntry = { id: `pwd_${Date.now()}`, ...newPwd };
@@ -1022,9 +1211,12 @@
       };
 
       const handleDelete = (id, label, role) => {
-        if (role === 'master' && data.passwords.filter(p => p.role === 'master').length <= 1) {
-          alert('無法刪除最後一組管理員 (MASTER) 密碼，這將導致系統無法管理！');
-          return;
+        if (role === 'master') {
+          const masterCount = data.passwords.filter(p => p.role === 'master').length;
+          if (masterCount <= 1) {
+            alert('無法刪除最後一組管理員 (MASTER) 密碼，這將導致系統無法管理！');
+            return;
+          }
         }
         showConfirm(`確定要刪除授權密碼「${label}」嗎？`, () => {
           executeSecureAction(`刪除授權密碼：${label}`, (user) => {
@@ -1036,36 +1228,79 @@
       return (
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
-            <div><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><KeyRound className="text-blue-500" />密碼與權限管理</h2><p className="text-slate-500 text-sm mt-1">此區僅限管理員 (MASTER) 存取。在此可新增、撤銷系統授權密碼。</p></div>
-            <button onClick={onClearAll} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-sm transition-colors shrink-0"><Trash2 size={16} /> 清空所有系統內容</button>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <KeyRound className="text-blue-500" />
+                密碼與權限管理
+              </h2>
+              <p className="text-slate-500 text-sm mt-1">此區僅限管理員 (MASTER) 存取。在此可新增、撤銷系統授權密碼。</p>
+            </div>
+            <button onClick={onClearAll} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-sm transition-colors shrink-0">
+              <Trash2 size={16} /> 清空所有系統內容
+            </button>
           </div>
 
           <form onSubmit={handleAdd} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 items-start md:items-end">
-            <div className="w-full md:w-1/4"><label className="block text-xs font-medium text-slate-700 mb-1">使用者或群組名稱</label><input type="text" value={newPwd.label} onChange={e => setNewPwd({...newPwd, label: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none" required placeholder="例如：開發組A、行銷主管..." /></div>
-            <div className="w-full md:w-1/4"><label className="block text-xs font-medium text-slate-700 mb-1">權限等級</label><select value={newPwd.role} onChange={e => setNewPwd({...newPwd, role: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none" required><option value="user">一般使用者 (USER) - 可編修資料</option><option value="master">管理員 (MASTER) - 擁有一切權限與稽核日誌</option></select></div>
+            <div className="w-full md:w-1/4">
+              <label className="block text-xs font-medium text-slate-700 mb-1">使用者或群組名稱</label>
+              <input type="text" value={newPwd.label} onChange={e => setNewPwd({...newPwd, label: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none" required placeholder="例如：開發組A、行銷主管..." />
+            </div>
+            <div className="w-full md:w-1/4">
+              <label className="block text-xs font-medium text-slate-700 mb-1">權限等級</label>
+              <select value={newPwd.role} onChange={e => setNewPwd({...newPwd, role: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none" required>
+                <option value="user">一般使用者 (USER) - 可編修資料</option>
+                <option value="master">管理員 (MASTER) - 擁有一切權限與稽核日誌</option>
+              </select>
+            </div>
             <div className="flex-1 w-full">
               <label className="block text-xs font-medium text-slate-700 mb-1">設定密碼 (16 ~ 32 碼)</label>
               <div className="relative">
-                <input type={showPwds ? "text" : "password"} value={newPwd.pwd} onChange={e => setNewPwd({...newPwd, pwd: e.target.value})} className={`w-full px-3 py-1.5 pr-8 border ${errorMsg ? 'border-red-400' : 'border-slate-300'} rounded-md outline-none font-mono tracking-widest`} required placeholder="大小寫英文、數字、符號皆可" />
-                <button type="button" onClick={() => setShowPwds(!showPwds)} className="absolute right-2 top-2 text-slate-400 hover:text-slate-600">{showPwds ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
+                <input 
+                  type={showPwds ? "text" : "password"} 
+                  value={newPwd.pwd} 
+                  onChange={e => setNewPwd({...newPwd, pwd: e.target.value})} 
+                  className={`w-full px-3 py-1.5 pr-8 border ${errorMsg ? 'border-red-400' : 'border-slate-300'} rounded-md outline-none font-mono tracking-widest`} 
+                  required 
+                  placeholder="大小寫英文、數字、符號皆可" 
+                />
+                <button type="button" onClick={() => setShowPwds(!showPwds)} className="absolute right-2 top-2 text-slate-400 hover:text-slate-600">
+                  {showPwds ? <EyeOff size={14}/> : <Eye size={14}/>}
+                </button>
               </div>
               {errorMsg && <div className="text-red-500 text-[10px] mt-1 font-bold">{errorMsg}</div>}
             </div>
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors h-[34px] w-full md:w-auto justify-center"><Plus size={16} /> 新增授權</button>
+            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors h-[34px] w-full md:w-auto justify-center">
+              <Plus size={16} /> 新增授權
+            </button>
           </form>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-slate-600 text-xs border-b border-slate-100"><th className="p-4 font-medium">身分標籤</th><th className="p-4 font-medium">權限</th><th className="p-4 font-medium">密碼 <button onClick={() => setShowPwds(!showPwds)} className="ml-2 text-blue-500 hover:underline">{showPwds ? '隱藏' : '顯示'}</button></th><th className="p-4 font-medium text-center w-20">操作</th></tr>
+                <tr className="bg-slate-50 text-slate-600 text-xs border-b border-slate-100">
+                  <th className="p-4 font-medium">身分標籤</th>
+                  <th className="p-4 font-medium">權限</th>
+                  <th className="p-4 font-medium">密碼 <button onClick={() => setShowPwds(!showPwds)} className="ml-2 text-blue-500 hover:underline">{showPwds ? '隱藏' : '顯示'}</button></th>
+                  <th className="p-4 font-medium text-center w-20">操作</th>
+                </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.passwords.map(p => (
                   <tr key={p.id} className="hover:bg-slate-50 transition-colors group text-sm">
                     <td className="p-4 font-medium">{p.label}</td>
-                    <td className="p-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.role === 'master' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{p.role === 'master' ? 'MASTER' : 'USER'}</span></td>
-                    <td className="p-4 font-mono text-slate-500 tracking-widest text-xs">{showPwds ? p.pwd : '•'.repeat(16)}</td>
-                    <td className="p-4 text-center"><button onClick={() => handleDelete(p.id, p.label, p.role)} className="text-slate-400 hover:text-red-500 transition-colors" title="撤銷密碼"><Trash2 size={16} /></button></td>
+                    <td className="p-4">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.role === 'master' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                        {p.role === 'master' ? 'MASTER' : 'USER'}
+                      </span>
+                    </td>
+                    <td className="p-4 font-mono text-slate-500 tracking-widest text-xs">
+                      {showPwds ? p.pwd : '•'.repeat(16)}
+                    </td>
+                    <td className="p-4 text-center">
+                      <button onClick={() => handleDelete(p.id, p.label, p.role)} className="text-slate-400 hover:text-red-500 transition-colors" title="撤銷密碼">
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
