@@ -18,40 +18,28 @@
   <!-- 載入 Babel (讓瀏覽器能直接讀取 React 語法) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
-<body class="bg-slate-50 text-slate-800">
+<body class="bg-[#0f172a] text-slate-100">
   <div id="root"></div>
 
-  <!-- 注意：為了使用模組化的雲端資料庫，這裡加入了 data-type="module" -->
   <script type="text/babel" data-type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
     const { useState, useEffect, useMemo, useRef } = React;
 
-    // --- 雲端資料庫初始化 ---
-    let db = null;
-    let auth = null;
-    let appId = 'taskmaster-db-264b9'; // 使用您的 Project ID 作為唯一識別
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwsDZqEfz4OmtjunJrFXd0utvlSohDOr8iZMRRtOAm9FjjAtpXY5YfEZmogTeRrgGLfMQ/exec';
 
-    // 填入您專屬的 Firebase 金鑰
-    const firebaseConfig = {
-      apiKey: "AIzaSyDZF10ZVhn-O6GlC5pLo2pK7TX72kmlUsQ",
-      authDomain: "taskmaster-db-264b9.firebaseapp.com",
-      projectId: "taskmaster-db-264b9",
-      storageBucket: "taskmaster-db-264b9.firebasestorage.app",
-      messagingSenderId: "399271801562",
-      appId: "1:399271801562:web:2762926f1656f18768ebe3",
-      measurementId: "G-BF6PWRB8M8"
+    const fetchApi = async (action, payload = null) => {
+      try {
+        const res = await fetch(action === 'getData' ? `${API_URL}?action=getData` : API_URL, {
+          method: action === 'getData' ? 'GET' : 'POST',
+          ...(action !== 'getData' && { body: JSON.stringify({ action, payload }) })
+        });
+        const result = await res.json();
+        if (result.status === 'success') return result.data;
+        throw new Error(result.message);
+      } catch (err) {
+        console.error("API 錯誤:", err);
+        throw err;
+      }
     };
-
-    try {
-      const app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-    } catch (error) {
-      console.error("雲端資料庫初始化失敗:", error);
-    }
 
     // --- 圖示元件 (使用 Phosphor Icons 相容設定) ---
     const LayoutDashboard = ({size=24, className=''}) => <i className={`ph ph-squares-four ${className}`} style={{fontSize: size}}></i>;
@@ -105,15 +93,15 @@
     const analyzeTaskStatus = (task) => {
       const today = getTodayStr();
       if (task.progress == 100) {
-        return { id: 'completed', label: '已完成', barColor: '#9ca3af', textColor: 'text-slate-500', badgeClass: 'bg-slate-100 text-slate-600', icon: <CheckCircle2 size={14}/> };
+        return { id: 'completed', label: '已完成', barColor: '#9ca3af', textColor: 'text-slate-500', badgeClass: 'bg-slate-800/60 text-slate-500', icon: <CheckCircle2 size={14}/> };
       }
       if (task.endDate < today && task.progress < 100) {
         return { id: 'delayed', label: '已延遲', barColor: '#ef4444', textColor: 'text-red-600', badgeClass: 'bg-red-100 text-red-700 font-bold border border-red-200', icon: <AlertCircle size={14}/> };
       }
       if (task.progress == 0 && task.startDate > today) {
-        return { id: 'not_started', label: '未開始', barColor: null, textColor: 'text-slate-400', badgeClass: 'bg-slate-50 text-slate-500 border border-slate-200', icon: <Clock size={14}/> };
+        return { id: 'not_started', label: '未開始', barColor: null, textColor: 'text-slate-500', badgeClass: 'bg-[#0f172a] text-slate-500 border border-slate-700', icon: <Clock size={14}/> };
       }
-      return { id: 'in_progress', label: '進行中', barColor: null, textColor: 'text-blue-600', badgeClass: 'bg-blue-50 text-blue-600 border border-blue-200', icon: <Clock size={14}/> };
+      return { id: 'in_progress', label: '進行中', barColor: null, textColor: 'text-indigo-400', badgeClass: 'bg-blue-50 text-indigo-400 border border-blue-200', icon: <Clock size={14}/> };
     };
 
     function App() {
@@ -127,59 +115,65 @@
       const [pwdInput, setPwdInput] = useState('');
       const [authError, setAuthError] = useState('');
 
-      const [cloudStatus, setCloudStatus] = useState(auth ? '☁️ 連線中...' : '☁️ 僅本地儲存');
-      const [cloudUser, setCloudUser] = useState(null);
+      const [cloudStatus, setCloudStatus] = useState('☁️ 準備連線');
       const fileInputRef = useRef(null);
 
-      // --- 1. 雲端資料庫：建立連線與認證 ---
       useEffect(() => {
-        if (!auth) return;
-        const initAuth = async () => {
+        const initData = async () => {
+          setCloudStatus('☁️ 讀取中...');
           try {
-            await signInAnonymously(auth);
+            const res = await fetchApi('getData');
+            if (res) {
+              setData(prev => ({
+                ...prev,
+                passwords: res.settings && res.settings.length > 0 
+                  ? res.settings.map((s) => ({
+                      id: s.id,
+                      role: s.role,
+                      pwd: String(s.password),
+                      label: String(s.label)
+                    }))
+                  : [],
+                plans: res.plans ? res.plans.map(p => {
+                  let parsedTags = [];
+                  if (typeof p.tags === 'string') {
+                    try { parsedTags = JSON.parse(p.tags); } catch(e) {}
+                  } else if (Array.isArray(p.tags)) {
+                    parsedTags = p.tags;
+                  }
+                  return { ...p, tags: parsedTags };
+                }) : [],
+                people: res.people || [],
+                tasks: res.tasks ? res.tasks.map(t => ({
+                  ...t,
+                  startDate: t.startDate ? String(t.startDate).substring(0, 10) : '',
+                  endDate: t.endDate ? String(t.endDate).substring(0, 10) : ''
+                })) : []
+              }));
+            }
+            setCloudStatus('☁️ 雲端已連線');
           } catch (e) {
-            console.error("雲端認證失敗:", e);
-            setCloudStatus('⚠️ 雲端斷線');
+            setCloudStatus('⚠️ 連線失敗');
           }
         };
-        initAuth();
-
-        const unsubscribe = onAuthStateChanged(auth, (u) => {
-          setCloudUser(u);
-          if (u) setCloudStatus('☁️ 雲端已連線');
-        });
-        return () => unsubscribe();
+        initData();
       }, []);
 
-      // --- 2. 雲端資料庫：監聽遠端資料變化 (自動讀取) ---
-      useEffect(() => {
-        if (!cloudUser || !db) return;
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'taskmaster', 'shared');
-        const unsubscribe = onSnapshot(docRef, (snapshot) => {
-          if (snapshot.exists()) {
-            const cloudData = snapshot.data();
-            if (cloudData.data) setData(cloudData.data);
-            if (cloudData.historyLog) setHistoryLog(cloudData.historyLog);
-            setCloudStatus('☁️ 雲端已同步');
-          }
-        }, (error) => {
-          console.error("讀取雲端資料發生錯誤:", error);
-          setCloudStatus('⚠️ 同步失敗');
-        });
-        return () => unsubscribe();
-      }, [cloudUser]);
-
-      // --- 3. 雲端資料庫：儲存資料到雲端 (自動寫入) ---
-      const saveToCloud = (newData, newLog) => {
-        if (!cloudUser || !db) return;
+      // 共用向 GAS 發送寫入請求的包裝函數
+      const syncToGAS = async (crudAction, sheetName, recordId, dataObj, userObj) => {
         setCloudStatus('☁️ 同步中...');
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'taskmaster', 'shared');
-        setDoc(docRef, { data: newData, historyLog: newLog })
-          .then(() => setCloudStatus('☁️ 雲端已同步'))
-          .catch(e => {
-            console.error("儲存至雲端失敗:", e);
-            setCloudStatus('⚠️ 儲存失敗');
+        try {
+          await fetchApi(crudAction, {
+            sheetName: sheetName,
+            id: recordId,
+            data: dataObj,
+            user: userObj ? userObj.label : 'System'
           });
+          setCloudStatus('☁️ 雲端已同步');
+        } catch(e) {
+          setCloudStatus('⚠️ 同步失敗');
+          showAlert('同步至 Google Sheets 失敗: ' + e.message);
+        }
       };
 
       const showAlert = (message) => setDialog({ isOpen: true, type: 'alert', message, onConfirm: null });
@@ -233,7 +227,7 @@
         const newLog = [newLogEntry, ...historyLog];
         setHistoryLog(newLog);
         setData(newData);
-        saveToCloud(newData, newLog);
+        
       };
 
       const rollback = (snapshot, logDescription) => {
@@ -250,7 +244,7 @@
             const finalData = snapshot ? snapshot : data;
             if (snapshot) setData(snapshot);
             setHistoryLog([]);
-            saveToCloud(finalData, []);
+            
             showAlert(`已成功將「${description}」設為新原點。`);
           }, 'master');
         });
@@ -284,7 +278,7 @@
                 setData(imported.data);
                 const newLog = imported.historyLog || [];
                 setHistoryLog(newLog);
-                saveToCloud(imported.data, newLog);
+                
                 setCurrentUser(null); 
                 showAlert('資料匯入成功，並已全數同步！');
               }
@@ -301,24 +295,24 @@
             const clearedData = { ...data, plans: [], people: [], tasks: [] };
             setData(clearedData);
             setHistoryLog([]);
-            saveToCloud(clearedData, []);
+            
             showAlert('系統資料已全數清空。');
           }, 'master');
         });
       };
 
       return (
-        <div className="flex flex-col h-screen bg-slate-50 text-slate-800 text-sm font-sans">
+        <div className="flex flex-col h-screen bg-[#0f172a] text-slate-100 text-sm font-sans">
           
           {/* 密碼驗證對話框 */}
           {authModal.isOpen && (
-            <div className="fixed inset-0 bg-slate-900/60 z-[150] flex items-center justify-center backdrop-blur-sm">
-              <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full mx-4 border border-slate-100 animate-in zoom-in-95 duration-200">
-                <div className="flex items-center gap-3 text-blue-600 mb-2">
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md/60 z-[150] flex items-center justify-center backdrop-blur-sm">
+              <div className="bg-slate-800/40 backdrop-blur-xl p-8 rounded-2xl shadow-2xl max-w-sm w-full mx-4 border border-slate-700/50 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-3 text-indigo-400 mb-2">
                   <ShieldCheck size={28} />
                   <h3 className="text-xl font-bold">身分驗證</h3>
                 </div>
-                <p className="text-slate-600 mb-6 text-sm">{authModal.message}</p>
+                <p className="text-slate-500 mb-6 text-sm">{authModal.message}</p>
                 
                 <form onSubmit={handleAuthSubmit}>
                   <div className="mb-4">
@@ -327,19 +321,19 @@
                       type="password" 
                       value={pwdInput} 
                       onChange={e => setPwdInput(e.target.value)} 
-                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-base tracking-widest font-mono"
+                      className="w-full px-4 py-2.5 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-base tracking-widest font-mono"
                       placeholder="••••••••••••••••"
                       autoFocus
                     />
                     {authError && <div className="text-red-500 text-xs mt-2 font-medium flex items-center gap-1"><AlertCircle size={14}/> {authError}</div>}
                   </div>
                   <div className="flex justify-end gap-3 mt-6">
-                    <button type="button" onClick={() => setAuthModal({...authModal, isOpen: false})} className="px-5 py-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 font-bold transition-colors">取消</button>
-                    <button type="submit" className="px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold transition-colors shadow-sm">確認解鎖</button>
+                    <button type="button" onClick={() => setAuthModal({...authModal, isOpen: false})} className="px-5 py-2.5 bg-slate-800/60 text-slate-500 rounded-xl hover:bg-slate-700 font-bold transition-colors">取消</button>
+                    <button type="submit" className="px-5 py-2.5 bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] text-white rounded-xl hover:bg-indigo-400 hover:shadow-[0_0_25px_rgba(99,102,241,0.6)] font-bold transition-colors shadow-2xl shadow-black/40">確認解鎖</button>
                   </div>
                 </form>
-                <div className="mt-6 pt-4 border-t border-slate-100 text-[10px] text-slate-400 text-center">
-                  (預設管理員密碼：<span className="font-mono bg-slate-100 px-1 py-0.5 rounded text-slate-500">本公司英文名（首字大寫、不要空格）+01!</span>)
+                <div className="mt-6 pt-4 border-t border-slate-700/50 text-[10px] text-slate-500 text-center">
+                  (預設管理員密碼：<span className="font-mono bg-slate-800/60 px-1 py-0.5 rounded text-slate-500">本公司英文名（首字大寫、不要空格）+01!</span>)
                 </div>
               </div>
             </div>
@@ -348,18 +342,18 @@
           {/* 系統提示對話框 */}
           {dialog.isOpen && (
             <div className="fixed inset-0 bg-black/50 z-[160] flex items-center justify-center">
-              <div className="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full mx-4">
-                <p className="text-slate-800 mb-6 text-base whitespace-pre-wrap">{dialog.message}</p>
+              <div className="bg-slate-800/40 backdrop-blur-xl p-6 rounded-xl shadow-xl max-w-sm w-full mx-4">
+                <p className="text-slate-100 mb-6 text-base whitespace-pre-wrap">{dialog.message}</p>
                 <div className="flex justify-end gap-3">
                   {dialog.type === 'confirm' && (
-                    <button onClick={closeDialog} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-medium">取消</button>
+                    <button onClick={closeDialog} className="px-4 py-2 bg-slate-800/60 text-slate-500 rounded-lg hover:bg-slate-700 font-medium">取消</button>
                   )}
                   <button 
                     onClick={() => {
                       if (dialog.onConfirm) dialog.onConfirm();
                       closeDialog();
                     }} 
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    className="px-4 py-2 bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] text-white rounded-lg hover:bg-indigo-400 hover:shadow-[0_0_25px_rgba(99,102,241,0.6)] font-medium"
                   >
                     確定
                   </button>
@@ -369,7 +363,7 @@
           )}
 
           {/* 頂部導覽列 */}
-          <header className="bg-slate-900 text-slate-300 flex items-center justify-between px-6 py-3 shadow-md z-20 shrink-0">
+          <header className="bg-slate-900/80 backdrop-blur-md text-slate-300 flex items-center justify-between px-6 py-3 shadow-[0_0_20px_rgba(0,0,0,0.5)] z-20 shrink-0">
             <div className="flex items-center gap-8">
               <div 
                 className="flex flex-col cursor-pointer hover:opacity-80 transition-opacity" 
@@ -400,17 +394,17 @@
             </div>
             <div className="flex items-center space-x-3">
               <div className="flex flex-col items-end mr-3 pr-4 border-r border-slate-700">
-                <span className={`text-[10px] font-bold ${cloudStatus.includes('失敗') || cloudStatus.includes('斷線') || cloudStatus.includes('僅本地') ? 'text-slate-400' : 'text-emerald-400'}`}>{cloudStatus}</span>
+                <span className={`text-[10px] font-bold ${cloudStatus.includes('失敗') || cloudStatus.includes('斷線') || cloudStatus.includes('僅本地') ? 'text-slate-500' : 'text-emerald-400'}`}>{cloudStatus}</span>
                 <span className="text-xs text-slate-500 mt-0.5 leading-none">儲存狀態</span>
               </div>
 
               {currentUser && (
                 <div className="flex items-center gap-2 mr-2 border-r border-slate-700 pr-4">
                   <div className="flex flex-col items-end">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">{currentUser.role === 'master' ? '管理員 (Master)' : '一般使用者'}</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase">{currentUser.role === 'master' ? '管理員 (Master)' : '一般使用者'}</span>
                     <span className="text-xs text-blue-300 font-medium">{currentUser.label}</span>
                   </div>
-                  <button onClick={() => setCurrentUser(null)} className="p-1.5 bg-slate-800 hover:bg-red-500 hover:text-white rounded-md transition-colors text-slate-400" title="登出並鎖定">
+                  <button onClick={() => setCurrentUser(null)} className="p-1.5 bg-slate-800 hover:bg-red-500 hover:text-white rounded-md transition-colors text-slate-500" title="登出並鎖定">
                     <LogOut size={16} />
                   </button>
                 </div>
@@ -428,11 +422,11 @@
 
           <main className="flex-1 overflow-auto p-6">
             {activeTab === 'dashboard' && <DashboardView data={data} />}
-            {activeTab === 'plans' && <PlansView data={data} commitData={commitData} executeSecureAction={executeSecureAction} showConfirm={showConfirm} />}
-            {activeTab === 'people' && <PeopleView data={data} commitData={commitData} executeSecureAction={executeSecureAction} showConfirm={showConfirm} />}
-            {activeTab === 'tasks' && <TasksView data={data} commitData={commitData} executeSecureAction={executeSecureAction} showConfirm={showConfirm} />}
+            {activeTab === 'plans' && <PlansView data={data} commitData={commitData} syncToGAS={syncToGAS} executeSecureAction={executeSecureAction} showConfirm={showConfirm} />}
+            {activeTab === 'people' && <PeopleView data={data} commitData={commitData} syncToGAS={syncToGAS} executeSecureAction={executeSecureAction} showConfirm={showConfirm} />}
+            {activeTab === 'tasks' && <TasksView data={data} commitData={commitData} syncToGAS={syncToGAS} executeSecureAction={executeSecureAction} showConfirm={showConfirm} />}
             {activeTab === 'history' && <HistoryView historyLog={historyLog} rollback={rollback} setAsOrigin={setAsOrigin} currentUser={currentUser} />}
-            {activeTab === 'passwords' && <PasswordsView data={data} commitData={commitData} executeSecureAction={executeSecureAction} showConfirm={showConfirm} onClearAll={handleClearAllData} />}
+            {activeTab === 'passwords' && <PasswordsView data={data} commitData={commitData} syncToGAS={syncToGAS} executeSecureAction={executeSecureAction} showConfirm={showConfirm} onClearAll={handleClearAllData} />}
           </main>
         </div>
       );
@@ -443,7 +437,7 @@
         <button
           onClick={onClick}
           className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-            active ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'
+            active ? 'bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] text-white shadow-[0_0_20px_rgba(0,0,0,0.5)]' : 'hover:bg-slate-800/80 hover:shadow-lg hover:text-white'
           }`}
         >
           {React.cloneElement(icon, { size: 16 })}
@@ -470,42 +464,42 @@
 
       return (
         <div className="space-y-6 animate-in fade-in duration-300">
-          <h2 className="text-2xl font-bold text-slate-800">專案數據儀表板 (KPI Dashboard)</h2>
+          <h2 className="text-2xl font-bold text-slate-100">專案數據儀表板 (KPI Dashboard)</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <StatCard title="總任務數" value={total} icon={<CheckSquare size={20} className="text-slate-500" />} />
             <StatCard title="平均總進度" value={`${avgProgress}%`} icon={<Activity size={20} className="text-amber-500" />} />
             <StatCard title="已完成" value={completed} icon={<CheckCircle2 size={20} className="text-emerald-500" />} />
-            <StatCard title="進行中" value={inProgress} icon={<Clock size={20} className="text-blue-500" />} />
-            <div className={`p-4 rounded-xl shadow-sm border flex items-center gap-3 ${delayed > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-slate-100'}`}>
-              <div className={`p-3 rounded-lg ${delayed > 0 ? 'bg-red-100 text-red-600' : 'bg-slate-50 text-slate-400'}`}>
+            <StatCard title="進行中" value={inProgress} icon={<Clock size={20} className="text-indigo-400" />} />
+            <div className={`p-4 rounded-xl shadow-2xl shadow-black/40 border flex items-center gap-3 ${delayed > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-800/40 backdrop-blur-xl border-slate-700/50'}`}>
+              <div className={`p-3 rounded-lg ${delayed > 0 ? 'bg-red-100 text-red-600' : 'bg-[#0f172a] text-slate-500'}`}>
                 <AlertCircle size={20} />
               </div>
               <div>
                 <div className={`text-xs font-medium ${delayed > 0 ? 'text-red-600' : 'text-slate-500'}`}>落後延遲任務</div>
-                <div className={`text-xl font-bold ${delayed > 0 ? 'text-red-700' : 'text-slate-800'}`}>{delayed}</div>
+                <div className={`text-xl font-bold ${delayed > 0 ? 'text-red-700' : 'text-slate-100'}`}>{delayed}</div>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 lg:col-span-1 flex flex-col">
+            <div className="bg-slate-800/40 backdrop-blur-xl p-5 rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 lg:col-span-1 flex flex-col">
               <h3 className="text-base font-bold mb-4">狀態分佈</h3>
               <div className="flex-1 flex flex-col justify-center space-y-4">
                 <ProgressBar label="已完成" count={completed} total={total} color="bg-slate-400" />
                 <ProgressBar label="進行中" count={inProgress} total={total} color="bg-blue-500" />
-                <ProgressBar label="未開始" count={notStarted} total={total} color="bg-slate-200" />
+                <ProgressBar label="未開始" count={notStarted} total={total} color="bg-slate-700" />
                 <ProgressBar label="已延遲" count={delayed} total={total} color="bg-red-500" />
               </div>
             </div>
 
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 lg:col-span-2">
+            <div className="bg-slate-800/40 backdrop-blur-xl p-5 rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 lg:col-span-2">
               <h3 className="text-base font-bold mb-3">需關注任務 (延遲或即將到期)</h3>
               <div className="space-y-2">
                 {tasksWithStatus.filter(t => t.state.id === 'delayed' || t.state.id === 'in_progress').slice(0, 5).map(task => {
                   const plan = data.plans.find(p => p.id === task.planId) || {};
                   return (
-                  <div key={task.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                  <div key={task.id} className="flex justify-between items-center p-3 bg-[#0f172a] rounded-lg border border-slate-700/50">
                     <div className="flex items-center gap-3">
                       <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs ${task.state.badgeClass}`}>
                         {task.state.icon} {task.state.label}
@@ -526,7 +520,7 @@
                   </div>
                 )})}
                 {tasksWithStatus.filter(t => t.state.id === 'delayed' || t.state.id === 'in_progress').length === 0 && (
-                  <div className="text-center text-slate-400 py-6 text-sm">目前無待辦或延遲的任務</div>
+                  <div className="text-center text-slate-500 py-6 text-sm">目前無待辦或延遲的任務</div>
                 )}
               </div>
             </div>
@@ -537,11 +531,11 @@
 
     function StatCard({ title, value, icon }) {
       return (
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center gap-3">
-          <div className="p-3 bg-slate-50 rounded-lg">{icon}</div>
+        <div className="bg-slate-800/40 backdrop-blur-xl p-4 rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 flex items-center gap-3">
+          <div className="p-3 bg-[#0f172a] rounded-lg">{icon}</div>
           <div>
             <div className="text-xs text-slate-500 font-medium">{title}</div>
-            <div className="text-xl font-bold text-slate-800">{value}</div>
+            <div className="text-xl font-bold text-slate-100">{value}</div>
           </div>
         </div>
       );
@@ -552,10 +546,10 @@
       return (
         <div>
           <div className="flex justify-between text-xs mb-1">
-            <span className="font-medium text-slate-600">{label} ({count})</span>
-            <span className="text-slate-400">{percent}%</span>
+            <span className="font-medium text-slate-500">{label} ({count})</span>
+            <span className="text-slate-500">{percent}%</span>
           </div>
-          <div className="w-full bg-slate-100 rounded-full h-2">
+          <div className="w-full bg-slate-800/60 rounded-full h-2">
             <div className={`${color} h-2 rounded-full`} style={{ width: `${percent}%` }}></div>
           </div>
         </div>
@@ -563,7 +557,7 @@
     }
 
     // 2. 計畫管理 (加上計畫編輯功能)
-    function PlansView({ data, commitData, executeSecureAction, showConfirm }) {
+    function PlansView({ data, commitData, executeSecureAction, showConfirm, syncToGAS }) {
       const [newPlan, setNewPlan] = useState({ name: '', color: '#3b82f6', tags: [] });
       const [editingPlan, setEditingPlan] = useState(null);
 
@@ -571,7 +565,10 @@
         e.preventDefault();
         if (!newPlan.name) return;
         executeSecureAction(`新增計畫：${newPlan.name}`, (user) => {
-          commitData({ ...data, plans: [...data.plans, { id: `p${Date.now()}`, ...newPlan }] }, `新增計畫：${newPlan.name}`, user);
+          const pId = `p${Date.now()}`;
+          const finalPlan = { id: pId, ...newPlan };
+          commitData({ ...data, plans: [...data.plans, finalPlan] }, `新增計畫：${newPlan.name}`, user);
+          syncToGAS('create', 'Plans', pId, {id: pId, name: newPlan.name, color: newPlan.color, tags: JSON.stringify(newPlan.tags)}, user);
           setNewPlan({ name: '', color: '#3b82f6', tags: [] });
         });
       };
@@ -580,6 +577,7 @@
         showConfirm(`確定刪除計畫「${name}」？此操作不會刪除已關聯的任務。`, () => {
           executeSecureAction(`刪除計畫：${name}`, (user) => {
             commitData({ ...data, plans: data.plans.filter(p => p.id !== id) }, `刪除計畫：${name}`, user);
+            syncToGAS('delete', 'Plans', id, null, user);
           });
         });
       };
@@ -590,6 +588,7 @@
         executeSecureAction(`修改計畫：${editingPlan.name}`, (user) => {
           const updatedPlans = data.plans.map(p => p.id === editingPlan.id ? editingPlan : p);
           commitData({ ...data, plans: updatedPlans }, `修改計畫名稱/顏色/標籤：${editingPlan.name}`, user);
+          syncToGAS('update', 'Plans', editingPlan.id, {name: editingPlan.name, color: editingPlan.color, tags: JSON.stringify(editingPlan.tags)}, user);
           setEditingPlan(null);
         });
       };
@@ -607,15 +606,15 @@
           
           {/* 編輯計畫對話框 */}
           {editingPlan && (
-            <div className="fixed inset-0 bg-slate-900/60 z-[120] flex items-center justify-center backdrop-blur-sm">
-              <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4 border border-slate-100 animate-in zoom-in-95 duration-200">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <Pencil size={20} className="text-blue-500"/> 修改計畫資料
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md/60 z-[120] flex items-center justify-center backdrop-blur-sm">
+              <div className="bg-slate-800/40 backdrop-blur-xl p-6 rounded-2xl shadow-xl max-w-md w-full mx-4 border border-slate-700/50 animate-in zoom-in-95 duration-200">
+                <h3 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
+                  <Pencil size={20} className="text-indigo-400"/> 修改計畫資料
                 </h3>
                 <form onSubmit={handleSavePlanEdit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">計畫名稱</label>
-                    <input type="text" value={editingPlan.name} onChange={e => setEditingPlan({...editingPlan, name: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required />
+                    <input type="text" value={editingPlan.name} onChange={e => setEditingPlan({...editingPlan, name: e.target.value})} className="w-full px-3 py-2 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none text-sm" required />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><Tag size={12}/> 標籤 (計畫類型)</label>
@@ -625,7 +624,7 @@
                           key={tag}
                           type="button"
                           onClick={() => toggleTag(editingPlan, setEditingPlan, tag)}
-                          className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${editingPlan.tags?.includes(tag) ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                          className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${editingPlan.tags?.includes(tag) ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-[#0f172a] text-slate-500 border-slate-700 hover:bg-slate-800/80 hover:shadow-lg/60'}`}
                         >
                           {tag}
                         </button>
@@ -634,29 +633,29 @@
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">識別色</label>
-                    <input type="color" value={editingPlan.color} onChange={e => setEditingPlan({...editingPlan, color: e.target.value})} className="h-10 w-full p-1 border border-slate-300 rounded-md cursor-pointer" />
+                    <input type="color" value={editingPlan.color} onChange={e => setEditingPlan({...editingPlan, color: e.target.value})} className="h-10 w-full p-1 border border-slate-600 rounded-md cursor-pointer" />
                   </div>
-                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-                    <button type="button" onClick={() => setEditingPlan(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-bold transition-colors">取消</button>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-sm">儲存修改</button>
+                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
+                    <button type="button" onClick={() => setEditingPlan(null)} className="px-4 py-2 bg-slate-800/60 text-slate-500 rounded-lg hover:bg-slate-700 font-bold transition-colors">取消</button>
+                    <button type="submit" className="px-4 py-2 bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] text-white rounded-lg hover:bg-indigo-400 hover:shadow-[0_0_25px_rgba(99,102,241,0.6)] font-bold transition-colors shadow-2xl shadow-black/40">儲存修改</button>
                   </div>
                 </form>
               </div>
             </div>
           )}
 
-          <h2 className="text-2xl font-bold text-slate-800">計畫管理</h2>
-          <form onSubmit={handleAdd} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col gap-4">
+          <h2 className="text-2xl font-bold text-slate-100">計畫管理</h2>
+          <form onSubmit={handleAdd} className="bg-slate-800/40 backdrop-blur-xl p-5 rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 flex flex-col gap-4">
             <div className="flex gap-4 items-end">
               <div className="flex-1">
-                <label className="block text-xs font-medium text-slate-700 mb-1">新增計畫名稱</label>
-                <input type="text" value={newPlan.name} onChange={e => setNewPlan({...newPlan, name: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none" required />
+                <label className="block text-xs font-medium text-slate-300 mb-1">新增計畫名稱</label>
+                <input type="text" value={newPlan.name} onChange={e => setNewPlan({...newPlan, name: e.target.value})} className="w-full px-3 py-1.5 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none" required />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">識別色</label>
-                <input type="color" value={newPlan.color} onChange={e => setNewPlan({...newPlan, color: e.target.value})} className="h-8 w-14 p-0.5 border border-slate-300 rounded-md cursor-pointer" />
+                <label className="block text-xs font-medium text-slate-300 mb-1">識別色</label>
+                <input type="color" value={newPlan.color} onChange={e => setNewPlan({...newPlan, color: e.target.value})} className="h-8 w-14 p-0.5 border border-slate-600 rounded-md cursor-pointer" />
               </div>
-              <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors">
+              <button type="submit" className="bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:bg-indigo-400 hover:shadow-[0_0_25px_rgba(99,102,241,0.6)] text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors">
                 <Plus size={16} /> 新增
               </button>
             </div>
@@ -668,7 +667,7 @@
                     key={tag}
                     type="button"
                     onClick={() => toggleTag(newPlan, setNewPlan, tag)}
-                    className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${newPlan.tags?.includes(tag) ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors border ${newPlan.tags?.includes(tag) ? 'bg-indigo-100 text-indigo-700 border-indigo-300' : 'bg-[#0f172a] text-slate-500 border-slate-700 hover:bg-slate-800/80 hover:shadow-lg/60'}`}
                   >
                     {tag}
                   </button>
@@ -679,7 +678,7 @@
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {data.plans.map(plan => (
-              <div key={plan.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center group transition-colors hover:border-blue-200">
+              <div key={plan.id} className="bg-slate-800/40 backdrop-blur-xl p-4 rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 flex justify-between items-center group transition-colors hover:border-blue-200">
                 <div className="flex flex-col gap-1 overflow-hidden">
                   <div className="flex items-center gap-3 truncate">
                     <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: plan.color }}></div>
@@ -692,8 +691,8 @@
                   )}
                 </div>
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <button onClick={() => setEditingPlan(plan)} className="text-slate-400 hover:text-blue-500 transition-colors" title="編輯計畫"><Pencil size={16} /></button>
-                  <button onClick={() => handleDelete(plan.id, plan.name)} className="text-slate-400 hover:text-red-500 transition-colors" title="刪除計畫"><Trash2 size={16} /></button>
+                  <button onClick={() => setEditingPlan(plan)} className="text-slate-500 hover:text-indigo-400 transition-colors" title="編輯計畫"><Pencil size={16} /></button>
+                  <button onClick={() => handleDelete(plan.id, plan.name)} className="text-slate-500 hover:text-red-500 transition-colors" title="刪除計畫"><Trash2 size={16} /></button>
                 </div>
               </div>
             ))}
@@ -703,13 +702,15 @@
     }
 
     // 3. 人員管理
-    function PeopleView({ data, commitData, executeSecureAction, showConfirm }) {
+    function PeopleView({ data, commitData, executeSecureAction, showConfirm, syncToGAS }) {
       const [newName, setNewName] = useState('');
       const handleAdd = (e) => {
         e.preventDefault();
         if (!newName) return;
         executeSecureAction(`新增人員：${newName}`, (user) => {
-          commitData({ ...data, people: [...data.people, { id: `u${Date.now()}`, name: newName }] }, `新增人員：${newName}`, user);
+          const uId = `u${Date.now()}`;
+          commitData({ ...data, people: [...data.people, { id: uId, name: newName }] }, `新增人員：${newName}`, user);
+          syncToGAS('create', 'People', uId, {id: uId, name: newName}, user);
           setNewName('');
         });
       };
@@ -717,17 +718,18 @@
         showConfirm(`確定移除人員「${name}」？`, () => {
           executeSecureAction(`移除人員：${name}`, (user) => {
             commitData({ ...data, people: data.people.filter(p => p.id !== id) }, `移除人員：${name}`, user);
+            syncToGAS('delete', 'People', id, null, user);
           });
         });
       };
 
       return (
         <div className="space-y-4 animate-in fade-in duration-300">
-          <h2 className="text-2xl font-bold text-slate-800">人員管理</h2>
-          <form onSubmit={handleAdd} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex gap-4 items-end max-w-2xl">
+          <h2 className="text-2xl font-bold text-slate-100">人員管理</h2>
+          <form onSubmit={handleAdd} className="bg-slate-800/40 backdrop-blur-xl p-5 rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 flex gap-4 items-end max-w-2xl">
             <div className="flex-1">
-              <label className="block text-xs font-medium text-slate-700 mb-1">人員名稱與職稱</label>
-              <input type="text" value={newName} onChange={e => setNewName(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none" required />
+              <label className="block text-xs font-medium text-slate-300 mb-1">人員名稱與職稱</label>
+              <input type="text" value={newName} onChange={e => setNewName(e.target.value)} className="w-full px-3 py-1.5 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none" required />
             </div>
             <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors">
               <Plus size={16} /> 新增
@@ -735,9 +737,9 @@
           </form>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {data.people.map(person => (
-              <div key={person.id} className="bg-white p-3 rounded-xl shadow-sm border flex justify-between items-center group hover:border-indigo-200 transition-colors">
+              <div key={person.id} className="bg-slate-800/40 backdrop-blur-xl p-3 rounded-xl shadow-2xl shadow-black/40 border flex justify-between items-center group hover:border-indigo-200 transition-colors">
                 <span className="font-medium text-sm truncate" title={person.name}>{person.name}</span>
-                <button onClick={() => handleDelete(person.id, person.name)} className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={16} /></button>
+                <button onClick={() => handleDelete(person.id, person.name)} className="text-slate-500 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={16} /></button>
               </div>
             ))}
           </div>
@@ -746,7 +748,7 @@
     }
 
     // 4. 任務管理
-    function TasksView({ data, commitData, executeSecureAction, showConfirm }) {
+    function TasksView({ data, commitData, executeSecureAction, showConfirm, syncToGAS }) {
       const [newTask, setNewTask] = useState({ name: '', planId: '', personId: '', startDate: '', endDate: '', progress: 0, importance: 3 });
       const [editingTask, setEditingTask] = useState(null);
       
@@ -758,8 +760,10 @@
         if (!newTask.name || !newTask.planId || !newTask.personId || !newTask.startDate || !newTask.endDate) return;
         
         executeSecureAction(`新增任務：${newTask.name}`, (user) => {
-          const task = { id: `t${Date.now()}`, ...newTask, progress: parseInt(newTask.progress) };
+          const tId = `t${Date.now()}`;
+          const task = { id: tId, ...newTask, progress: parseInt(newTask.progress) };
           commitData({ ...data, tasks: [...data.tasks, task] }, `新增任務：${task.name}`, user);
+          syncToGAS('create', 'Tasks', tId, {id: tId, planId: task.planId, personId: task.personId, name: task.name, startDate: task.startDate, endDate: task.endDate, progress: task.progress, importance: task.importance}, user);
           setNewTask({ name: '', planId: '', personId: '', startDate: '', endDate: '', progress: 0, importance: 3 });
         });
       };
@@ -768,6 +772,7 @@
         executeSecureAction(`更新任務進度`, (user) => {
           const updatedTasks = data.tasks.map(t => t.id === id ? { ...t, progress: parseInt(newProgress) } : t);
           commitData({ ...data, tasks: updatedTasks }, `更新任務進度`, user);
+          syncToGAS('update', 'Tasks', id, {progress: parseInt(newProgress)}, user);
         });
       };
 
@@ -775,6 +780,7 @@
         executeSecureAction(`更新任務重要性`, (user) => {
           const updatedTasks = data.tasks.map(t => t.id === id ? { ...t, importance: newImportance } : t);
           commitData({ ...data, tasks: updatedTasks }, `更新任務重要性`, user);
+          syncToGAS('update', 'Tasks', id, {importance: newImportance}, user);
         });
       };
 
@@ -782,6 +788,7 @@
         showConfirm(`確定刪除任務「${name}」？`, () => {
           executeSecureAction(`刪除任務：${name}`, (user) => {
             commitData({ ...data, tasks: data.tasks.filter(t => t.id !== id) }, `刪除任務：${name}`, user);
+            syncToGAS('delete', 'Tasks', id, null, user);
           });
         });
       };
@@ -792,6 +799,7 @@
         executeSecureAction(`修改任務細節：${editingTask.name}`, (user) => {
           const updatedTasks = data.tasks.map(t => t.id === editingTask.id ? { ...editingTask, progress: parseInt(editingTask.progress) } : t);
           commitData({ ...data, tasks: updatedTasks }, `修改任務細節：${editingTask.name}`, user);
+          syncToGAS('update', 'Tasks', editingTask.id, {planId: editingTask.planId, personId: editingTask.personId, name: editingTask.name, startDate: editingTask.startDate, endDate: editingTask.endDate}, user);
           setEditingTask(null);
         });
       };
@@ -863,28 +871,28 @@
           
           {/* 編輯任務細節對話框 */}
           {editingTask && (
-            <div className="fixed inset-0 bg-slate-900/60 z-[120] flex items-center justify-center backdrop-blur-sm">
-              <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4 border border-slate-100 animate-in zoom-in-95 duration-200">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <Pencil size={20} className="text-blue-500"/> 編輯任務細節
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md/60 z-[120] flex items-center justify-center backdrop-blur-sm">
+              <div className="bg-slate-800/40 backdrop-blur-xl p-6 rounded-2xl shadow-xl max-w-md w-full mx-4 border border-slate-700/50 animate-in zoom-in-95 duration-200">
+                <h3 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
+                  <Pencil size={20} className="text-indigo-400"/> 編輯任務細節
                 </h3>
                 <form onSubmit={handleSaveTaskEdit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-1">任務名稱</label>
-                    <input type="text" value={editingTask.name} onChange={e => setEditingTask({...editingTask, name: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required />
+                    <input type="text" value={editingTask.name} onChange={e => setEditingTask({...editingTask, name: e.target.value})} className="w-full px-3 py-2 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none text-sm" required />
                   </div>
 
                   <div className="flex gap-4">
                     <div className="flex-1">
                       <label className="block text-xs font-bold text-slate-500 mb-1">所屬計畫</label>
-                      <select value={editingTask.planId} onChange={e => setEditingTask({...editingTask, planId: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required>
+                      <select value={editingTask.planId} onChange={e => setEditingTask({...editingTask, planId: e.target.value})} className="w-full px-3 py-2 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none text-sm" required>
                         <option value="">選擇...</option>
                         {data.plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </div>
                     <div className="flex-1">
                       <label className="block text-xs font-bold text-slate-500 mb-1">負責人</label>
-                      <select value={editingTask.personId} onChange={e => setEditingTask({...editingTask, personId: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required>
+                      <select value={editingTask.personId} onChange={e => setEditingTask({...editingTask, personId: e.target.value})} className="w-full px-3 py-2 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none text-sm" required>
                         <option value="">選擇...</option>
                         {data.people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
@@ -893,16 +901,16 @@
                   <div className="flex gap-4">
                     <div className="flex-1">
                       <label className="block text-xs font-bold text-slate-500 mb-1">開始日期</label>
-                      <input type="date" value={editingTask.startDate} onChange={e => setEditingTask({...editingTask, startDate: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required />
+                      <input type="date" value={editingTask.startDate} onChange={e => setEditingTask({...editingTask, startDate: e.target.value})} className="w-full px-3 py-2 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none text-sm" required />
                     </div>
                     <div className="flex-1">
                       <label className="block text-xs font-bold text-slate-500 mb-1">結束日期</label>
-                      <input type="date" value={editingTask.endDate} onChange={e => setEditingTask({...editingTask, endDate: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-md outline-none text-sm" required />
+                      <input type="date" value={editingTask.endDate} onChange={e => setEditingTask({...editingTask, endDate: e.target.value})} className="w-full px-3 py-2 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none text-sm" required />
                     </div>
                   </div>
-                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-                    <button type="button" onClick={() => setEditingTask(null)} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 font-bold transition-colors">取消</button>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-sm">儲存修改</button>
+                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700/50">
+                    <button type="button" onClick={() => setEditingTask(null)} className="px-4 py-2 bg-slate-800/60 text-slate-500 rounded-lg hover:bg-slate-700 font-bold transition-colors">取消</button>
+                    <button type="submit" className="px-4 py-2 bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] text-white rounded-lg hover:bg-indigo-400 hover:shadow-[0_0_25px_rgba(99,102,241,0.6)] font-bold transition-colors shadow-2xl shadow-black/40">儲存修改</button>
                   </div>
                 </form>
               </div>
@@ -910,20 +918,20 @@
           )}
 
           <div className="flex justify-between items-end">
-            <h2 className="text-2xl font-bold text-slate-800">任務與排程管理</h2>
+            <h2 className="text-2xl font-bold text-slate-100">任務與排程管理</h2>
             
-            <div className="flex items-center gap-2 bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">
-              <Filter size={14} className="text-slate-400 ml-1" />
+            <div className="flex items-center gap-2 bg-slate-800/40 backdrop-blur-xl p-1.5 rounded-lg border border-slate-700 shadow-2xl shadow-black/40 text-xs">
+              <Filter size={14} className="text-slate-500 ml-1" />
               <span className="text-slate-500 font-medium mr-1">篩選:</span>
-              <select value={filters.planId} onChange={e => setFilters({...filters, planId: e.target.value})} className="border-none bg-slate-50 rounded px-2 py-1 outline-none cursor-pointer">
+              <select value={filters.planId} onChange={e => setFilters({...filters, planId: e.target.value})} className="border-none bg-[#0f172a] rounded px-2 py-1 outline-none cursor-pointer">
                 <option value="">所有計畫</option>
                 {data.plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
-              <select value={filters.personId} onChange={e => setFilters({...filters, personId: e.target.value})} className="border-none bg-slate-50 rounded px-2 py-1 outline-none cursor-pointer">
+              <select value={filters.personId} onChange={e => setFilters({...filters, personId: e.target.value})} className="border-none bg-[#0f172a] rounded px-2 py-1 outline-none cursor-pointer">
                 <option value="">所有人員</option>
                 {data.people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
-              <select value={filters.statusId} onChange={e => setFilters({...filters, statusId: e.target.value})} className="border-none bg-slate-50 rounded px-2 py-1 outline-none cursor-pointer">
+              <select value={filters.statusId} onChange={e => setFilters({...filters, statusId: e.target.value})} className="border-none bg-[#0f172a] rounded px-2 py-1 outline-none cursor-pointer">
                 <option value="">所有狀態</option>
                 <option value="in_progress">進行中</option>
                 <option value="completed">已完成</option>
@@ -934,28 +942,28 @@
                 <button onClick={() => setFilters({planId:'', personId:'', statusId:''})} className="text-red-500 hover:text-red-700 px-2 font-medium">清除</button>
               )}
               {sortConfig && (
-                <button onClick={resetSort} className="text-blue-500 hover:text-blue-700 px-2 font-medium border-l border-slate-200 ml-1">回復原始排序</button>
+                <button onClick={resetSort} className="text-indigo-400 hover:text-blue-700 px-2 font-medium border-l border-slate-700 ml-1">回復原始排序</button>
               )}
             </div>
           </div>
           
           {/* 新增任務表單 */}
-          <form onSubmit={handleAdd} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-3 shrink-0">
+          <form onSubmit={handleAdd} className="bg-slate-800/40 backdrop-blur-xl p-4 rounded-xl shadow-2xl shadow-black/40 border border-slate-700 flex flex-col gap-3 shrink-0">
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">任務名稱</label>
-                <input type="text" value={newTask.name} onChange={e => setNewTask({...newTask, name: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none text-sm" required placeholder="輸入任務內容..." />
+                <input type="text" value={newTask.name} onChange={e => setNewTask({...newTask, name: e.target.value})} className="w-full px-3 py-1.5 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none text-sm" required placeholder="輸入任務內容..." />
               </div>
               <div className="w-full md:w-56">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">所屬計畫</label>
-                <select value={newTask.planId} onChange={e => setNewTask({...newTask, planId: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none text-sm" required>
+                <select value={newTask.planId} onChange={e => setNewTask({...newTask, planId: e.target.value})} className="w-full px-3 py-1.5 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none text-sm" required>
                   <option value="">選擇...</option>
                   {data.plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div className="w-full md:w-56">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">負責人</label>
-                <select value={newTask.personId} onChange={e => setNewTask({...newTask, personId: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none text-sm" required>
+                <select value={newTask.personId} onChange={e => setNewTask({...newTask, personId: e.target.value})} className="w-full px-3 py-1.5 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none text-sm" required>
                   <option value="">選擇...</option>
                   {data.people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -966,9 +974,9 @@
               <div className="w-full md:w-auto">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">時程 (起 - 訖)</label>
                 <div className="flex items-center gap-1.5">
-                  <input type="date" value={newTask.startDate} onChange={e => setNewTask({...newTask, startDate: e.target.value})} className="w-40 px-2 py-1.5 border border-slate-300 rounded-md outline-none text-xs" required />
-                  <span className="text-slate-400">-</span>
-                  <input type="date" value={newTask.endDate} onChange={e => setNewTask({...newTask, endDate: e.target.value})} className="w-40 px-2 py-1.5 border border-slate-300 rounded-md outline-none text-xs" required />
+                  <input type="date" value={newTask.startDate} onChange={e => setNewTask({...newTask, startDate: e.target.value})} className="w-40 px-2 py-1.5 border border-slate-600 rounded-md outline-none text-xs" required />
+                  <span className="text-slate-500">-</span>
+                  <input type="date" value={newTask.endDate} onChange={e => setNewTask({...newTask, endDate: e.target.value})} className="w-40 px-2 py-1.5 border border-slate-600 rounded-md outline-none text-xs" required />
                 </div>
               </div>
               <div className="w-full md:w-48">
@@ -993,32 +1001,32 @@
           </form>
 
           {/* 任務列表與每日網格時間軸 */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto overflow-y-auto flex-1 relative">
+          <div className="bg-slate-800/40 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/40 border border-slate-700 overflow-x-auto overflow-y-auto flex-1 relative">
             <div className="w-max min-w-full flex flex-col">
-              <div className="flex border-b border-slate-200 bg-slate-100 text-[11px] text-slate-600 font-bold sticky top-0 z-30 shadow-sm">
-                <div className="sticky left-0 bg-slate-100 z-40 flex shadow-[2px_0_5px_rgba(0,0,0,0.06)] shrink-0 h-8">
-                  <div className="w-48 px-1.5 py-1 border-r border-slate-200 flex items-center">任務名稱</div>
-                  <div className="w-16 px-1.5 py-1 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('status')}>
-                    狀態 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
+              <div className="flex border-b border-slate-700 bg-slate-800/60 text-[11px] text-slate-500 font-bold sticky top-0 z-30 shadow-2xl shadow-black/40">
+                <div className="sticky left-0 bg-slate-800/60 z-40 flex shadow-[2px_0_5px_rgba(0,0,0,0.06)] shrink-0 h-8">
+                  <div className="w-48 px-1.5 py-1 border-r border-slate-700 flex items-center">任務名稱</div>
+                  <div className="w-16 px-1.5 py-1 border-r border-slate-700 flex items-center justify-center cursor-pointer hover:bg-slate-700 select-none" onClick={() => handleSort('status')}>
+                    狀態 <span className="text-indigo-400 w-2 ml-0.5">{sortConfig?.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
                   </div>
-                  <div className="w-16 px-1.5 py-1 border-r border-slate-200 flex items-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('person')}>
-                    負責人 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'person' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
+                  <div className="w-16 px-1.5 py-1 border-r border-slate-700 flex items-center cursor-pointer hover:bg-slate-700 select-none" onClick={() => handleSort('person')}>
+                    負責人 <span className="text-indigo-400 w-2 ml-0.5">{sortConfig?.key === 'person' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
                   </div>
-                  <div className="w-16 px-1.5 py-1 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('importance')}>
-                    重要性 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'importance' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
+                  <div className="w-16 px-1.5 py-1 border-r border-slate-700 flex items-center justify-center cursor-pointer hover:bg-slate-700 select-none" onClick={() => handleSort('importance')}>
+                    重要性 <span className="text-indigo-400 w-2 ml-0.5">{sortConfig?.key === 'importance' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
                   </div>
-                  <div className="w-12 px-1.5 py-1 border-r border-slate-200 flex items-center justify-center cursor-pointer hover:bg-slate-200 select-none" onClick={() => handleSort('progress')}>
-                    進度 <span className="text-blue-500 w-2 ml-0.5">{sortConfig?.key === 'progress' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
+                  <div className="w-12 px-1.5 py-1 border-r border-slate-700 flex items-center justify-center cursor-pointer hover:bg-slate-700 select-none" onClick={() => handleSort('progress')}>
+                    進度 <span className="text-indigo-400 w-2 ml-0.5">{sortConfig?.key === 'progress' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : ''}</span>
                   </div>
-                  <div className="w-12 px-1.5 py-1 border-r border-slate-200 flex items-center justify-center">操作</div>
+                  <div className="w-12 px-1.5 py-1 border-r border-slate-700 flex items-center justify-center">操作</div>
                 </div>
-                <div className="flex bg-slate-50">
+                <div className="flex bg-[#0f172a]">
                   {timeline.days.map((day, i) => {
                     const dayStr = `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}`;
                     const isToday = dayStr === todayStr;
                     return (
-                      <div key={i} className={`w-8 py-0.5 border-r border-slate-200 flex flex-col items-center justify-center shrink-0 h-8 ${isToday ? 'bg-amber-100 border-amber-300' : ''}`} title={isToday ? '今天' : dayStr}>
-                        <span className={`text-[9px] leading-none mb-0.5 ${isToday ? 'text-amber-700 font-bold' : 'text-slate-400'}`}>{day.getMonth()+1}月</span>
+                      <div key={i} className={`w-8 py-0.5 border-r border-slate-700 flex flex-col items-center justify-center shrink-0 h-8 ${isToday ? 'bg-amber-100 border-amber-300' : ''}`} title={isToday ? '今天' : dayStr}>
+                        <span className={`text-[9px] leading-none mb-0.5 ${isToday ? 'text-amber-700 font-bold' : 'text-slate-500'}`}>{day.getMonth()+1}月</span>
                         <span className={`text-[11px] leading-none ${isToday ? 'text-amber-700 font-bold' : ''}`}>{day.getDate()}</span>
                       </div>
                     );
@@ -1035,9 +1043,9 @@
                   const finalBarColor = statusInfo.barColor || plan.color || '#94a3b8';
 
                   return (
-                    <div key={task.id} className="flex hover:bg-slate-50 group items-stretch transition-colors">
-                      <div className="sticky left-0 bg-white group-hover:bg-slate-50 z-20 flex shadow-[2px_0_5px_rgba(0,0,0,0.04)] shrink-0 transition-colors text-[11px]">
-                        <div className="w-48 px-1.5 py-1 border-r border-slate-100 flex flex-col justify-center relative">
+                    <div key={task.id} className="flex hover:bg-[#0f172a] group items-stretch transition-colors">
+                      <div className="sticky left-0 bg-slate-800/40 backdrop-blur-xl group-hover:bg-[#0f172a] z-20 flex shadow-[2px_0_5px_rgba(0,0,0,0.04)] shrink-0 transition-colors text-[11px]">
+                        <div className="w-48 px-1.5 py-1 border-r border-slate-700/50 flex flex-col justify-center relative">
                           <div className="font-medium text-xs whitespace-normal break-words" title={task.name}>
                             {plan.tags && plan.tags.length > 0 && (
                               <span className="text-indigo-600 font-bold mr-1 text-[10px]">
@@ -1046,19 +1054,19 @@
                             )}
                             {task.name}
                           </div>
-                          <div className="text-[10px] text-slate-400 truncate mt-0.5 flex items-center gap-1">
+                          <div className="text-[10px] text-slate-500 truncate mt-0.5 flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0" style={{backgroundColor: plan.color}}></span>
                             <span className="truncate">{plan.name || '已刪除計畫'}</span>
                           </div>
                         </div>
-                        <div className="w-16 px-1.5 py-1 border-r border-slate-100 flex items-center justify-center">
-                          <span className={`flex items-center justify-center px-1 py-0.5 rounded text-[10px] w-full shadow-sm truncate ${statusInfo.badgeClass}`} title={statusInfo.label}>
+                        <div className="w-16 px-1.5 py-1 border-r border-slate-700/50 flex items-center justify-center">
+                          <span className={`flex items-center justify-center px-1 py-0.5 rounded text-[10px] w-full shadow-2xl shadow-black/40 truncate ${statusInfo.badgeClass}`} title={statusInfo.label}>
                             <span className="truncate">{statusInfo.label}</span>
                           </span>
                         </div>
-                        <div className="w-16 px-1.5 py-1 border-r border-slate-100 flex items-center text-[11px] truncate" title={person.name}>{person.name || '未知'}</div>
+                        <div className="w-16 px-1.5 py-1 border-r border-slate-700/50 flex items-center text-[11px] truncate" title={person.name}>{person.name || '未知'}</div>
                         
-                        <div className="w-16 px-1.5 py-1 border-r border-slate-100 flex items-center justify-center gap-0.5">
+                        <div className="w-16 px-1.5 py-1 border-r border-slate-700/50 flex items-center justify-center gap-0.5">
                           {[1, 2, 3, 4, 5].map(star => (
                             <Star 
                               key={star} 
@@ -1070,7 +1078,7 @@
                           ))}
                         </div>
 
-                        <div className="w-12 px-1 py-1 border-r border-slate-100 flex items-center justify-center relative overflow-hidden group/progress">
+                        <div className="w-12 px-1 py-1 border-r border-slate-700/50 flex items-center justify-center relative overflow-hidden group/progress">
                           <div 
                             className="absolute left-0 top-0 bottom-0 opacity-20 transition-all duration-300 pointer-events-none"
                             style={{ width: `${task.progress}%`, backgroundColor: finalBarColor }}
@@ -1078,20 +1086,20 @@
                           <select 
                             value={task.progress} 
                             onChange={(e) => handleUpdateProgress(task.id, e.target.value)} 
-                            className={`w-full text-center bg-transparent border-b border-transparent group-hover/progress:border-slate-300 focus:border-blue-500 outline-none font-bold ${statusInfo.textColor} cursor-pointer relative z-10 appearance-none text-xs`} 
+                            className={`w-full text-center bg-transparent border-b border-transparent bg-transparent text-slate-100 group-hover/progress:border-slate-600 focus:border-blue-500 outline-none font-bold ${statusInfo.textColor} cursor-pointer relative z-10 appearance-none text-xs`} 
                             title="點擊選擇進度"
                           >
                             {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(val => (
-                              <option key={val} value={val} className="text-slate-800 font-medium">{val}%</option>
+                              <option key={val} value={val} className="text-slate-100 font-medium">{val}%</option>
                             ))}
                           </select>
                         </div>
                         
-                        <div className="w-12 px-1.5 py-1 border-r border-slate-100 flex items-center justify-center gap-2">
-                          <button onClick={() => setEditingTask(task)} className="text-slate-400 hover:text-blue-500 transition-colors" title="編輯任務">
+                        <div className="w-12 px-1.5 py-1 border-r border-slate-700/50 flex items-center justify-center gap-2">
+                          <button onClick={() => setEditingTask(task)} className="text-slate-500 hover:text-indigo-400 transition-colors" title="編輯任務">
                             <Pencil size={14} />
                           </button>
-                          <button onClick={() => handleDelete(task.id, task.name)} className="text-slate-400 hover:text-red-500 transition-colors" title="刪除任務">
+                          <button onClick={() => handleDelete(task.id, task.name)} className="text-slate-500 hover:text-red-500 transition-colors" title="刪除任務">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -1106,10 +1114,10 @@
                           const isToday = dayStr === todayStr;
 
                           return (
-                            <div key={i} className={`w-8 border-r border-slate-100 shrink-0 flex items-center justify-center ${isToday ? 'bg-amber-50/50' : ''} ${isStart ? 'pl-0.5' : ''} ${isEnd ? 'pr-0.5' : ''}`}>
+                            <div key={i} className={`w-8 border-r border-slate-700/50 shrink-0 flex items-center justify-center ${isToday ? 'bg-amber-50/50' : ''} ${isStart ? 'pl-0.5' : ''} ${isEnd ? 'pr-0.5' : ''}`}>
                               {isWithin && (
                                 <div 
-                                  className={`h-4 w-full ${isStart ? 'rounded-l-sm' : ''} ${isEnd ? 'rounded-r-sm' : ''} shadow-sm opacity-90`} 
+                                  className={`h-4 w-full ${isStart ? 'rounded-l-sm' : ''} ${isEnd ? 'rounded-r-sm' : ''} shadow-2xl shadow-black/40 opacity-90`} 
                                   style={{ backgroundColor: finalBarColor }}
                                   title={`${task.name} (${task.startDate} ~ ${task.endDate})`}
                                 />
@@ -1122,7 +1130,7 @@
                   );
                 })}
                 {sortedTasks.length === 0 && (
-                  <div className="p-8 text-center text-slate-400 text-sm">找不到符合條件的任務</div>
+                  <div className="p-8 text-center text-slate-500 text-sm">找不到符合條件的任務</div>
                 )}
               </div>
             </div>
@@ -1135,8 +1143,8 @@
     function HistoryView({ historyLog, rollback, setAsOrigin, currentUser }) {
       if (historyLog.length === 0) return (
         <div className="space-y-4 animate-in fade-in duration-300">
-          <h2 className="text-2xl font-bold text-slate-800">修改紀錄</h2>
-          <div className="bg-white p-10 rounded-xl shadow-sm border border-slate-100 text-center text-slate-500"><History size={40} className="mx-auto mb-4 opacity-20" /><p className="text-sm">目前尚無任何修改紀錄。</p></div>
+          <h2 className="text-2xl font-bold text-slate-100">修改紀錄</h2>
+          <div className="bg-slate-800/40 backdrop-blur-xl p-10 rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 text-center text-slate-500"><History size={40} className="mx-auto mb-4 opacity-20" /><p className="text-sm">目前尚無任何修改紀錄。</p></div>
         </div>
       );
 
@@ -1144,19 +1152,19 @@
         <div className="space-y-4 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
             <div>
-              <h2 className="text-2xl font-bold text-slate-800">修改紀錄與回溯</h2>
+              <h2 className="text-2xl font-bold text-slate-100">修改紀錄與回溯</h2>
               <p className="text-slate-500 text-sm mt-1">這裡紀錄了你所有的操作，可以選擇回溯，或將某個狀態設為新的起點。</p>
             </div>
-            <button onClick={() => setAsOrigin(null, '當前系統狀態')} className="flex items-center justify-center gap-1.5 text-xs px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors font-bold border border-red-200 shrink-0 shadow-sm">
+            <button onClick={() => setAsOrigin(null, '當前系統狀態')} className="flex items-center justify-center gap-1.5 text-xs px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors font-bold border border-red-200 shrink-0 shadow-2xl shadow-black/40">
               <Save size={16} /> 將當前狀態設為原點
             </button>
           </div>
 
-          <div className="relative border-l-2 border-slate-200 ml-3 space-y-6 py-4">
+          <div className="relative border-l-2 border-slate-700 ml-3 space-y-6 py-4">
             {historyLog.map((log) => (
               <div key={log.id} className="relative pl-5">
                 <div className="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full bg-blue-500 border-4 border-slate-50"></div>
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                <div className="bg-slate-800/40 backdrop-blur-xl p-4 rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 flex flex-col md:flex-row md:justify-between md:items-start gap-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <div className="text-xs text-slate-500">{log.timestamp}</div>
@@ -1166,13 +1174,13 @@
                         </span>
                       )}
                     </div>
-                    <div className="font-medium text-slate-800 text-base">{log.description}</div>
+                    <div className="font-medium text-slate-100 text-base">{log.description}</div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <button onClick={() => setAsOrigin(log.snapshot, log.description)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 rounded-md transition-colors font-bold" title="以此狀態作為新的起點並清除其他紀錄">
                       <Save size={14} /> 儲存為原點
                     </button>
-                    <button onClick={() => rollback(log.snapshot, log.description)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-100 hover:bg-amber-100 hover:text-amber-700 text-slate-600 rounded-md transition-colors font-bold">
+                    <button onClick={() => rollback(log.snapshot, log.description)} className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-800/60 hover:bg-amber-100 hover:text-amber-700 text-slate-500 rounded-md transition-colors font-bold">
                       <Undo2 size={14} /> 回溯至此狀態
                     </button>
                   </div>
@@ -1185,7 +1193,7 @@
     }
 
     // 6. 新增：權限與密碼管理中心
-    function PasswordsView({ data, commitData, executeSecureAction, showConfirm, onClearAll }) {
+    function PasswordsView({ data, commitData, executeSecureAction, showConfirm, onClearAll, syncToGAS }) {
       const [newPwd, setNewPwd] = useState({ label: '', role: 'user', pwd: '' });
       const [showPwds, setShowPwds] = useState(false);
       const [errorMsg, setErrorMsg] = useState('');
@@ -1207,6 +1215,7 @@
         executeSecureAction(`新增授權密碼：${newPwd.label}`, (user) => {
           const pwdEntry = { id: `pwd_${Date.now()}`, ...newPwd };
           commitData({ ...data, passwords: [...data.passwords, pwdEntry] }, `新增密碼：${newPwd.label}`, user);
+          syncToGAS('create', 'Settings', pwdEntry.id, { id: pwdEntry.id, label: newPwd.label, role: newPwd.role, password: newPwd.pwd }, user);
           setNewPwd({ label: '', role: 'user', pwd: '' });
         }, 'master');
       };
@@ -1222,6 +1231,7 @@
         showConfirm(`確定要刪除授權密碼「${label}」嗎？`, () => {
           executeSecureAction(`刪除授權密碼：${label}`, (user) => {
             commitData({ ...data, passwords: data.passwords.filter(p => p.id !== id) }, `刪除密碼：${label}`, user);
+            syncToGAS('delete', 'Settings', id, null, user);
           }, 'master');
         });
       };
@@ -1230,67 +1240,67 @@
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
             <div>
-              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                <KeyRound className="text-blue-500" />
+              <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+                <KeyRound className="text-indigo-400" />
                 密碼與權限管理
               </h2>
               <p className="text-slate-500 text-sm mt-1">此區僅限管理員 (MASTER) 存取。在此可新增、撤銷系統授權密碼。</p>
             </div>
-            <button onClick={onClearAll} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-sm transition-colors shrink-0">
+            <button onClick={onClearAll} className="flex items-center justify-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold shadow-2xl shadow-black/40 transition-colors shrink-0">
               <Trash2 size={16} /> 清空所有系統內容
             </button>
           </div>
 
-          <form onSubmit={handleAdd} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 items-start md:items-end">
+          <form onSubmit={handleAdd} className="bg-slate-800/40 backdrop-blur-xl p-5 rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 flex flex-col md:flex-row gap-4 items-start md:items-end">
             <div className="w-full md:w-1/4">
-              <label className="block text-xs font-medium text-slate-700 mb-1">使用者或群組名稱</label>
-              <input type="text" value={newPwd.label} onChange={e => setNewPwd({...newPwd, label: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none" required placeholder="例如：開發組A、行銷主管..." />
+              <label className="block text-xs font-medium text-slate-300 mb-1">使用者或群組名稱</label>
+              <input type="text" value={newPwd.label} onChange={e => setNewPwd({...newPwd, label: e.target.value})} className="w-full px-3 py-1.5 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none" required placeholder="例如：開發組A、行銷主管..." />
             </div>
             <div className="w-full md:w-1/4">
-              <label className="block text-xs font-medium text-slate-700 mb-1">權限等級</label>
-              <select value={newPwd.role} onChange={e => setNewPwd({...newPwd, role: e.target.value})} className="w-full px-3 py-1.5 border border-slate-300 rounded-md outline-none" required>
+              <label className="block text-xs font-medium text-slate-300 mb-1">權限等級</label>
+              <select value={newPwd.role} onChange={e => setNewPwd({...newPwd, role: e.target.value})} className="w-full px-3 py-1.5 bg-slate-800/50 border text-slate-200 border-slate-600 rounded-md outline-none" required>
                 <option value="user">一般使用者 (USER) - 可編修資料</option>
                 <option value="master">管理員 (MASTER) - 擁有一切權限與稽核日誌</option>
               </select>
             </div>
             <div className="flex-1 w-full">
-              <label className="block text-xs font-medium text-slate-700 mb-1">設定密碼 (16 ~ 32 碼)</label>
+              <label className="block text-xs font-medium text-slate-300 mb-1">設定密碼 (16 ~ 32 碼)</label>
               <div className="relative">
                 <input 
                   type={showPwds ? "text" : "password"} 
                   value={newPwd.pwd} 
                   onChange={e => setNewPwd({...newPwd, pwd: e.target.value})} 
-                  className={`w-full px-3 py-1.5 pr-8 border ${errorMsg ? 'border-red-400' : 'border-slate-300'} rounded-md outline-none font-mono tracking-widest`} 
+                  className={`w-full px-3 py-1.5 pr-8 bg-slate-800/50 border text-slate-200 ${errorMsg ? 'border-red-400' : 'border-slate-600'} rounded-md outline-none font-mono tracking-widest`} 
                   required 
                   placeholder="大小寫英文、數字、符號皆可" 
                 />
-                <button type="button" onClick={() => setShowPwds(!showPwds)} className="absolute right-2 top-2 text-slate-400 hover:text-slate-600">
+                <button type="button" onClick={() => setShowPwds(!showPwds)} className="absolute right-2 top-2 text-slate-500 hover:text-slate-500">
                   {showPwds ? <EyeOff size={14}/> : <Eye size={14}/>}
                 </button>
               </div>
               {errorMsg && <div className="text-red-500 text-[10px] mt-1 font-bold">{errorMsg}</div>}
             </div>
-            <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors h-[34px] w-full md:w-auto justify-center">
+            <button type="submit" className="bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:bg-indigo-400 hover:shadow-[0_0_25px_rgba(99,102,241,0.6)] text-white px-5 py-1.5 rounded-md font-medium flex items-center gap-2 transition-colors h-[34px] w-full md:w-auto justify-center">
               <Plus size={16} /> 新增授權
             </button>
           </form>
 
-          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="bg-slate-800/40 backdrop-blur-xl rounded-xl shadow-2xl shadow-black/40 border border-slate-700/50 overflow-hidden">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-slate-600 text-sm border-b border-slate-100">
+                <tr className="bg-[#0f172a] text-slate-500 text-sm border-b border-slate-700/50">
                   <th className="px-4 py-3 font-medium">身分標籤</th>
                   <th className="px-4 py-3 font-medium">權限</th>
-                  <th className="px-4 py-3 font-medium">密碼 <button onClick={() => setShowPwds(!showPwds)} className="ml-2 text-blue-500 hover:underline">{showPwds ? '隱藏' : '顯示'}</button></th>
+                  <th className="px-4 py-3 font-medium">密碼 <button onClick={() => setShowPwds(!showPwds)} className="ml-2 text-indigo-400 hover:underline">{showPwds ? '隱藏' : '顯示'}</button></th>
                   <th className="px-4 py-3 font-medium text-center w-20">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.passwords.map(p => (
-                  <tr key={p.id} className="hover:bg-slate-50 transition-colors group text-base">
+                  <tr key={p.id} className="hover:bg-[#0f172a] transition-colors group text-base">
                     <td className="px-4 py-3 font-medium">{p.label}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${p.role === 'master' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${p.role === 'master' ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' : 'bg-slate-800/60 text-slate-500 border border-slate-700'}`}>
                         {p.role === 'master' ? 'MASTER' : 'USER'}
                       </span>
                     </td>
@@ -1298,7 +1308,7 @@
                       {showPwds ? p.pwd : '•'.repeat(16)}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button onClick={() => handleDelete(p.id, p.label, p.role)} className="text-slate-400 hover:text-red-500 transition-colors" title="撤銷密碼">
+                      <button onClick={() => handleDelete(p.id, p.label, p.role)} className="text-slate-500 hover:text-red-500 transition-colors" title="撤銷密碼">
                         <Trash2 size={16} />
                       </button>
                     </td>
